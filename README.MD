@@ -5,3 +5,4 @@
   make migrate           # run Alembic migrations
   make seed-api-key      # create first admin key
   make dev               # start the API server
+
