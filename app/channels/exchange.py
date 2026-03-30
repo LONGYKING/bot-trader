@@ -34,6 +34,18 @@ _DEFAULT_POSITION_SIZE_PCT = 0.05
 _DEFAULT_ORDER_TYPE = "market"
 
 
+async def _get_open_positions(client, symbol: str) -> list[dict]:
+    """Return open positions for *symbol* with non-zero size.
+
+    Returns an empty list if the exchange does not support fetch_positions.
+    """
+    try:
+        positions = await client.fetch_positions([symbol])
+        return [p for p in positions if float(p.get("contracts") or 0) != 0]
+    except Exception:  # noqa: BLE001 — exchange may not support positions API
+        return []
+
+
 def _resolve_symbol(symbol: str, markets: dict) -> str | None:
     """Map a generic symbol (e.g. ETH/USD) to an exchange-native ccxt key.
 
@@ -85,6 +97,16 @@ class ExchangeChannel(AbstractChannel):
         v = self.config.get("stop_loss_pct")
         return float(v) if v is not None else None
 
+    def _take_profit_pct(self) -> float | None:
+        v = self.config.get("take_profit_pct")
+        return float(v) if v is not None else None
+
+    def _close_on_opposite_signal(self) -> bool:
+        return bool(self.config.get("close_on_opposite_signal", True))
+
+    def _max_open_positions(self) -> int:
+        return int(self.config.get("max_open_positions", 1))
+
     def _leverage(self) -> int:
         return int(self.config.get("leverage", 1))
 
@@ -128,6 +150,49 @@ class ExchangeChannel(AbstractChannel):
                     await client.set_leverage(self._leverage(), symbol)
                 except Exception:  # noqa: BLE001
                     pass  # not all exchanges support this call the same way
+
+            # 2b. Close any opposing position before opening a new one
+            if self._close_on_opposite_signal():
+                positions = await _get_open_positions(client, symbol)
+                for pos in positions:
+                    pos_side = (pos.get("side") or "").lower()  # "long" or "short"
+                    is_opposing = (side == "buy" and pos_side == "short") or (
+                        side == "sell" and pos_side == "long"
+                    )
+                    if is_opposing:
+                        close_amount = abs(float(pos.get("contracts") or 0))
+                        if close_amount > 0:
+                            close_side = "buy" if pos_side == "short" else "sell"
+                            try:
+                                await client.create_order(
+                                    symbol, "market", close_side, close_amount,
+                                    params={"reduceOnly": True},
+                                )
+                                log.info(
+                                    "exchange_channel.position_closed",
+                                    exchange=exchange_id,
+                                    symbol=symbol,
+                                    closed_side=pos_side,
+                                    amount=close_amount,
+                                )
+                            except Exception as close_err:  # noqa: BLE001
+                                log.warning(
+                                    "exchange_channel.position_close_failed",
+                                    exchange=exchange_id,
+                                    symbol=symbol,
+                                    error=str(close_err),
+                                )
+
+            # 2c. Enforce max open positions limit
+            open_positions = await _get_open_positions(client, symbol)
+            if len(open_positions) >= self._max_open_positions():
+                return DeliveryResult(
+                    success=False,
+                    error=(
+                        f"Max open positions ({self._max_open_positions()}) "
+                        f"already reached for {symbol} on {exchange_id}"
+                    ),
+                )
 
             # 3. Fetch available balance
             # Deribit and other inverse-contract exchanges hold margin in the
@@ -215,6 +280,32 @@ class ExchangeChannel(AbstractChannel):
                     log.warning(
                         "exchange_channel.stop_loss_failed",
                         error=str(sl_err),
+                    )
+
+            # 7. Optional take-profit (limit order on the opposite side)
+            tp_pct = self._take_profit_pct()
+            if tp_pct and order_id:
+                tp_side = "sell" if side == "buy" else "buy"
+                tp_price = (
+                    price * (1 + tp_pct) if side == "buy" else price * (1 - tp_pct)
+                )
+                tp_price = float(client.price_to_precision(symbol, tp_price))
+                try:
+                    await client.create_order(
+                        symbol, "limit", tp_side, amount,
+                        price=tp_price,
+                        params={"reduceOnly": True},
+                    )
+                    log.info(
+                        "exchange_channel.take_profit_placed",
+                        exchange=exchange_id,
+                        symbol=symbol,
+                        tp_price=tp_price,
+                    )
+                except Exception as tp_err:  # noqa: BLE001
+                    log.warning(
+                        "exchange_channel.take_profit_failed",
+                        error=str(tp_err),
                     )
 
             return DeliveryResult(success=True, external_msg_id=order_id)
