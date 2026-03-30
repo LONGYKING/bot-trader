@@ -13,3 +13,7 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 uv.lock
+cred.md
+swiftlynx-49953722a5be.json
+backtest_exports/
+
