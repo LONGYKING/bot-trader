@@ -111,7 +111,7 @@ class ExchangeChannel(AbstractChannel):
         return int(self.config.get("leverage", 1))
 
     # ------------------------------------------------------------------
-    # AbstractChannel interface
+    # AbstractChannel interface 
     # ------------------------------------------------------------------
 
     async def send(self, formatted_message: dict) -> DeliveryResult:
