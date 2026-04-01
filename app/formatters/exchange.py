@@ -23,12 +23,14 @@ from __future__ import annotations
 from typing import Any
 
 from app.formatters.base import AbstractFormatter
+from app.formatters.registry import FormatterRegistry
 from app.types.signal import SignalData
 
 # Directions that map to a buy (long) order
 _BUY_DIRECTIONS: frozenset[str] = frozenset({"call", "long"})
 
 
+@FormatterRegistry.register("exchange")
 class ExchangeFormatter(AbstractFormatter):
     """Formats a typed signal payload into an exchange order specification."""
 

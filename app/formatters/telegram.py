@@ -2,6 +2,7 @@ import random
 from typing import Any
 
 from app.formatters.base import AbstractFormatter
+from app.formatters.registry import FormatterRegistry
 from app.types.signal import SignalData
 
 # Maps signal_value → (emoji, label)
@@ -55,6 +56,7 @@ def _format_indicators(snapshot: dict[str, Any]) -> str:
     return " | ".join(parts)
 
 
+@FormatterRegistry.register("telegram")
 class TelegramFormatter(AbstractFormatter):
     def format_signal(self, signal_data: SignalData) -> str:
         emoji, label = _SIGNAL_MAP.get(signal_data.signal_value, ("⏸", "NEUTRAL"))

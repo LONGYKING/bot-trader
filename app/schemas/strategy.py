@@ -17,7 +17,7 @@ class StrategyCreate(BaseModel):
     trade_type: str = "options"
     execution_params: dict = Field(default_factory=dict)
     interval_minutes: int = 15
-    risk_config: StrategyRiskConfig = Field(default_factory=StrategyRiskConfig)
+    risk_config: StrategyRiskConfig = Field(default_factory=StrategyRiskConfig)  # type: ignore[arg-type]
 
 
 class StrategyUpdate(BaseModel):

@@ -1,6 +1,6 @@
 .PHONY: dev worker migrate migration test lint format seed-api-key \
         docker-up docker-down docker-build docker-logs docker-api docker-worker \
-        install setup
+        install setup frontend frontend-install dev-all
 
 # ── Local development ──────────────────────────────────────────────────────────
 
@@ -39,6 +39,17 @@ format:
 
 seed-api-key:
 	uv run python scripts/create_api_key.py
+
+frontend-install:
+	cd frontend && npm install
+
+frontend:
+	cd frontend && npm run dev
+
+# Start full local stack: api + arq worker + Next.js UI
+dev-all:
+	@echo "Starting api, worker, and frontend..."
+	@make dev & make worker & make frontend
 
 # ── Docker (full stack) ────────────────────────────────────────────────────────
 

@@ -18,6 +18,9 @@ async def create_subscription(
     channel_id = data.get("channel_id")
     strategy_id = data.get("strategy_id")
 
+    if channel_id is None:
+        raise NotFoundError("Channel", "None")
+
     channel_repo = ChannelRepository(session)
     channel = await channel_repo.get_by_id(channel_id)
     if channel is None:

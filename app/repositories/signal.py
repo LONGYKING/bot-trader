@@ -36,6 +36,30 @@ class SignalRepository(BaseRepository[Signal]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    def _signal_conditions(
+        self,
+        strategy_id: uuid.UUID | None = None,
+        asset: str | None = None,
+        signal_value: int | None = None,
+        from_dt: datetime | None = None,
+        to_dt: datetime | None = None,
+        is_profitable: bool | None = None,
+    ) -> list:
+        conds = []
+        if strategy_id is not None:
+            conds.append(Signal.strategy_id == strategy_id)
+        if asset is not None:
+            conds.append(Signal.asset == asset)
+        if signal_value is not None:
+            conds.append(Signal.signal_value == signal_value)
+        if from_dt is not None:
+            conds.append(Signal.entry_time >= from_dt)
+        if to_dt is not None:
+            conds.append(Signal.entry_time <= to_dt)
+        if is_profitable is not None:
+            conds.append(Signal.is_profitable == is_profitable)
+        return conds
+
     async def list_filtered(
         self,
         strategy_id: uuid.UUID | None = None,
@@ -48,21 +72,9 @@ class SignalRepository(BaseRepository[Signal]):
         offset: int = 0,
     ) -> list[Signal]:
         stmt = select(Signal)
-        conditions = []
-        if strategy_id is not None:
-            conditions.append(Signal.strategy_id == strategy_id)
-        if asset is not None:
-            conditions.append(Signal.asset == asset)
-        if signal_value is not None:
-            conditions.append(Signal.signal_value == signal_value)
-        if from_dt is not None:
-            conditions.append(Signal.entry_time >= from_dt)
-        if to_dt is not None:
-            conditions.append(Signal.entry_time <= to_dt)
-        if is_profitable is not None:
-            conditions.append(Signal.is_profitable == is_profitable)
-        if conditions:
-            stmt = stmt.where(and_(*conditions))
+        conds = self._signal_conditions(strategy_id, asset, signal_value, from_dt, to_dt, is_profitable)
+        if conds:
+            stmt = stmt.where(and_(*conds))
         stmt = stmt.order_by(Signal.entry_time.desc()).offset(offset).limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -79,21 +91,9 @@ class SignalRepository(BaseRepository[Signal]):
         from sqlalchemy import func
 
         stmt = select(func.count()).select_from(Signal)
-        conditions = []
-        if strategy_id is not None:
-            conditions.append(Signal.strategy_id == strategy_id)
-        if asset is not None:
-            conditions.append(Signal.asset == asset)
-        if signal_value is not None:
-            conditions.append(Signal.signal_value == signal_value)
-        if from_dt is not None:
-            conditions.append(Signal.entry_time >= from_dt)
-        if to_dt is not None:
-            conditions.append(Signal.entry_time <= to_dt)
-        if is_profitable is not None:
-            conditions.append(Signal.is_profitable == is_profitable)
-        if conditions:
-            stmt = stmt.where(and_(*conditions))
+        conds = self._signal_conditions(strategy_id, asset, signal_value, from_dt, to_dt, is_profitable)
+        if conds:
+            stmt = stmt.where(and_(*conds))
         result = await self.session.execute(stmt)
         return result.scalar_one()
 

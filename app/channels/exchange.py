@@ -471,7 +471,7 @@ class ExchangeChannel(AbstractChannel):
             try:
                 await client.create_order(
                     symbol, "trailing_stop_market", sl_side, amount,
-                    params={"callbackRate": cfg.trailing_stop_pct * 100},
+                    params={"callbackRate": cfg.trailing_stop_pct * 100, "reduceOnly": True},
                 )
                 log.info("exchange_channel.trailing_stop_placed",
                          exchange=cfg.exchange_id, symbol=symbol,
@@ -499,7 +499,12 @@ class ExchangeChannel(AbstractChannel):
         try:
             await client.create_order(
                 symbol, "stop_market", sl_side, amount,
-                params={"stopPrice": sl_price},
+                price=sl_price,          # ccxt unified (most exchanges)
+                params={
+                    "trigger_price": sl_price,  # Deribit
+                    "stopPrice": sl_price,       # Binance futures
+                    "reduceOnly": True,
+                },
             )
             log.info("exchange_channel.stop_loss_placed",
                      exchange=cfg.exchange_id, symbol=symbol, stop_price=sl_price)

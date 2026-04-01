@@ -25,3 +25,8 @@ class ApiKeyResponse(BaseModel):
 
 class ApiKeyCreatedResponse(ApiKeyResponse):
     raw_key: str  # Only returned once at creation
+
+
+class WorkerStats(BaseModel):
+    status: str
+    message: str

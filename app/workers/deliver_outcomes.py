@@ -10,12 +10,11 @@ channels received the original signal — those same channels get the outcome.
 import uuid
 
 import structlog
-from sqlalchemy import select
 
 from app.channels.registry import ChannelRegistry
 from app.formatters.registry import get_formatter
-from app.models.delivery import SignalDelivery
 from app.repositories.channel import ChannelRepository
+from app.repositories.delivery import DeliveryRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -47,15 +46,8 @@ async def deliver_outcomes(ctx: dict, outcomes: list[dict]) -> dict:
         async with ctx["session_factory"]() as session:
             async with session.begin():
                 # Find all deliveries that were successfully sent for this signal
-                stmt = (
-                    select(SignalDelivery)
-                    .where(
-                        SignalDelivery.signal_id == signal_uuid,
-                        SignalDelivery.status == "sent",
-                    )
-                )
-                result = await session.execute(stmt)
-                deliveries = list(result.scalars().all())
+                delivery_repo = DeliveryRepository(session)
+                deliveries = await delivery_repo.get_by_signal_and_status(signal_uuid, "sent")
 
                 if not deliveries:
                     continue

@@ -24,6 +24,8 @@ async def submit_backtest(
     """
     strategy_repo = StrategyRepository(session)
     strategy_id = data.get("strategy_id")
+    if strategy_id is None:
+        raise NotFoundError("Strategy", "None")
     strategy = await strategy_repo.get_by_id(strategy_id)
     if strategy is None:
         raise NotFoundError("Strategy", str(strategy_id))
@@ -42,7 +44,7 @@ async def submit_backtest(
     backtest = await repo.create(backtest_data)
 
     # Enqueue the arq job
-    job = await arq_pool.enqueue_job("run_backtest", backtest_id=str(backtest.id))
+    job = await arq_pool.enqueue_job("run_backtest", backtest_id=str(backtest.id))  # type: ignore[attr-defined]
 
     # Store the arq job id for tracking / cancellation
     job_id = job.job_id if hasattr(job, "job_id") else str(job)
@@ -99,7 +101,7 @@ async def cancel_backtest(
         # Attempt to abort the arq job if we have a job id
         if backtest.arq_job_id:
             try:
-                job = arq_pool.job(backtest.arq_job_id)
+                job = arq_pool.job(backtest.arq_job_id)  # type: ignore[attr-defined]
                 await job.abort()
             except Exception:  # noqa: BLE001
                 # Best-effort — job may have already completed

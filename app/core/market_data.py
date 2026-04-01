@@ -170,7 +170,7 @@ async def _fetch_binance_range(
                 "symbol": rest_symbol, "interval": interval,
                 "startTime": cursor, "endTime": end_ms, "limit": batch_size,
             }
-            async with session.get(_BINANCE_KLINES_URL, params=params) as resp:
+            async with session.get(_BINANCE_KLINES_URL, params=params) as resp:  # type: ignore[arg-type]
                 resp.raise_for_status()
                 data = await resp.json()
 

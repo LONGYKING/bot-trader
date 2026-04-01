@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, select, update
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.delivery import SignalDelivery
 from app.repositories.base import BaseRepository
@@ -49,6 +50,36 @@ class DeliveryRepository(BaseRepository[SignalDelivery]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_by_signal_and_status(
+        self, signal_id: uuid.UUID, status: str
+    ) -> list[SignalDelivery]:
+        stmt = select(SignalDelivery).where(
+            SignalDelivery.signal_id == signal_id,
+            SignalDelivery.status == status,
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def _update_status(
+        self,
+        id: uuid.UUID,
+        new_status: str,
+        status_clause: ColumnElement[bool],
+        **extra_values: object,
+    ) -> None:
+        now = datetime.now(UTC)
+        stmt = (
+            update(SignalDelivery)
+            .where(SignalDelivery.id == id, status_clause)
+            .values(
+                status=new_status,
+                last_attempt_at=now,
+                attempt_count=SignalDelivery.attempt_count + 1,
+                **extra_values,
+            )
+        )
+        await self.session.execute(stmt)
+
     async def mark_sent(
         self,
         id: uuid.UUID,
@@ -56,71 +87,36 @@ class DeliveryRepository(BaseRepository[SignalDelivery]):
         delivery_metadata: dict | None = None,
     ) -> None:
         now = datetime.now(UTC)
-        stmt = (
-            update(SignalDelivery)
-            .where(
-                SignalDelivery.id == id,
-                SignalDelivery.status.in_(["pending", "retrying"]),
-            )
-            .values(
-                status="sent",
-                delivered_at=now,
-                last_attempt_at=now,
-                attempt_count=SignalDelivery.attempt_count + 1,
-                external_msg_id=external_msg_id,
-                delivery_metadata=delivery_metadata,
-                error_message=None,
-            )
+        await self._update_status(
+            id,
+            "sent",
+            SignalDelivery.status.in_(["pending", "retrying"]),
+            delivered_at=now,
+            external_msg_id=external_msg_id,
+            delivery_metadata=delivery_metadata,
+            error_message=None,
         )
-        await self.session.execute(stmt)
 
     async def mark_failed(self, id: uuid.UUID, error: str) -> None:
-        now = datetime.now(UTC)
-        stmt = (
-            update(SignalDelivery)
-            .where(
-                SignalDelivery.id == id,
-                SignalDelivery.status == "pending",
-            )
-            .values(
-                status="failed",
-                last_attempt_at=now,
-                attempt_count=SignalDelivery.attempt_count + 1,
-                error_message=error,
-            )
+        await self._update_status(
+            id,
+            "failed",
+            SignalDelivery.status == "pending",
+            error_message=error,
         )
-        await self.session.execute(stmt)
 
     async def mark_retrying(self, id: uuid.UUID, error: str) -> None:
-        now = datetime.now(UTC)
-        stmt = (
-            update(SignalDelivery)
-            .where(
-                SignalDelivery.id == id,
-                SignalDelivery.status.in_(["pending", "retrying"]),
-            )
-            .values(
-                status="retrying",
-                last_attempt_at=now,
-                attempt_count=SignalDelivery.attempt_count + 1,
-                error_message=error,
-            )
+        await self._update_status(
+            id,
+            "retrying",
+            SignalDelivery.status.in_(["pending", "retrying"]),
+            error_message=error,
         )
-        await self.session.execute(stmt)
 
     async def mark_dlq(self, id: uuid.UUID, error: str) -> None:
-        now = datetime.now(UTC)
-        stmt = (
-            update(SignalDelivery)
-            .where(
-                SignalDelivery.id == id,
-                SignalDelivery.status != "dlq",
-            )
-            .values(
-                status="dlq",
-                last_attempt_at=now,
-                attempt_count=SignalDelivery.attempt_count + 1,
-                error_message=error,
-            )
+        await self._update_status(
+            id,
+            "dlq",
+            SignalDelivery.status != "dlq",
+            error_message=error,
         )
-        await self.session.execute(stmt)

@@ -1,6 +1,7 @@
 from typing import Any
 
 from app.formatters.base import AbstractFormatter
+from app.formatters.registry import FormatterRegistry
 from app.types.signal import SignalData
 
 _SIGNAL_MAP: dict[int, tuple[str, str]] = {
@@ -51,6 +52,7 @@ def _table_row(label: str, value: str, alt: bool = False) -> str:
     )
 
 
+@FormatterRegistry.register("email")
 class EmailFormatter(AbstractFormatter):
     def format_signal(self, signal_data: SignalData) -> dict[str, Any]:
         signal_value = signal_data.signal_value

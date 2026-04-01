@@ -2,9 +2,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.formatters.base import AbstractFormatter
+from app.formatters.registry import FormatterRegistry
 from app.types.signal import SignalData
 
 
+@FormatterRegistry.register("webhook")
 class WebhookFormatter(AbstractFormatter):
     def format_signal(self, signal_data: SignalData) -> dict[str, Any]:
         payload: dict[str, Any] = {

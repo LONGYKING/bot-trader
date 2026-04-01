@@ -12,7 +12,7 @@ class SubscriptionCreate(BaseModel):
     asset_filter: list[str] | None = None
     signal_filter: list[int] | None = None
     min_confidence: float = Field(0.0, ge=0.0, le=1.0)
-    preferences: SubscriptionPreferences = Field(default_factory=SubscriptionPreferences)
+    preferences: SubscriptionPreferences = Field(default_factory=SubscriptionPreferences)  # type: ignore[arg-type]
 
 
 class SubscriptionUpdate(BaseModel):

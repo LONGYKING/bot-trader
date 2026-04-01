@@ -105,13 +105,15 @@ def create_app() -> FastAPI:
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(AuthMiddleware)
 
-    # Exception handlers
-    app.add_exception_handler(NotFoundError, not_found_handler)
-    app.add_exception_handler(ConflictError, conflict_handler)
-    app.add_exception_handler(ValidationError, validation_handler)
-    app.add_exception_handler(AuthenticationError, authentication_handler)
-    app.add_exception_handler(AuthorizationError, authorization_handler)
-    app.add_exception_handler(ExternalServiceError, external_service_handler)
+    # Exception handlers — type: ignore because Starlette's add_exception_handler
+    # signature expects handlers typed for the base Exception, but our handlers
+    # are typed for specific subclasses (correct at runtime, not expressible in mypy).
+    app.add_exception_handler(NotFoundError, not_found_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ConflictError, conflict_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ValidationError, validation_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(AuthenticationError, authentication_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(AuthorizationError, authorization_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ExternalServiceError, external_service_handler)  # type: ignore[arg-type]
 
     # Routes
     app.include_router(api_router)

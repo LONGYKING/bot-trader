@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.formatters.base import AbstractFormatter
+from app.formatters.registry import FormatterRegistry
 from app.types.signal import SignalData
 
 _SIGNAL_MAP: dict[int, tuple[str, str]] = {
@@ -41,6 +42,7 @@ def _format_indicators(snapshot: dict) -> str:
     return " | ".join(parts)
 
 
+@FormatterRegistry.register("discord")
 class DiscordFormatter(AbstractFormatter):
     def format_signal(self, signal_data: SignalData) -> dict[str, Any]:
         signal_value = signal_data.signal_value

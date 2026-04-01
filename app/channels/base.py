@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -16,7 +17,7 @@ class AbstractChannel(ABC):
         self.config = config
 
     @abstractmethod
-    async def send(self, formatted_message: any) -> DeliveryResult: ...
+    async def send(self, formatted_message: Any) -> DeliveryResult: ...
 
     @abstractmethod
     async def send_test(self) -> DeliveryResult: ...

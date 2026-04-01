@@ -107,6 +107,8 @@ async def resolve_outcomes(session: AsyncSession) -> list[dict]:
             continue
 
         expiry = signal.expiry_time
+        if expiry is None:
+            continue
         cache_key = (strat.exchange, signal.asset, signal.timeframe, expiry)
 
         if cache_key not in price_cache:

@@ -26,12 +26,12 @@ def setup_logging(environment: str = "development") -> None:
     ]
 
     if environment == "production":
-        renderer = structlog.processors.JSONRenderer()
+        renderer: structlog.processors.JSONRenderer | structlog.dev.ConsoleRenderer = structlog.processors.JSONRenderer()
     else:
         renderer = structlog.dev.ConsoleRenderer(colors=True)
 
     structlog.configure(
-        processors=shared_processors + [
+        processors=shared_processors + [  # type: ignore[arg-type]
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
@@ -44,7 +44,7 @@ def setup_logging(environment: str = "development") -> None:
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             renderer,
         ],
-        foreign_pre_chain=shared_processors,
+        foreign_pre_chain=shared_processors,  # type: ignore[arg-type]
     )
 
     handler = logging.StreamHandler(sys.stdout)

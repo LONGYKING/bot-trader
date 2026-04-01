@@ -93,6 +93,8 @@ async def rotate_api_key(
     new_prefix = new_raw_key[:10]
 
     updated = await repo.update(id, {"key_hash": new_hash, "key_prefix": new_prefix})
+    if updated is None:
+        raise NotFoundError("ApiKey", str(id))
     return updated, new_raw_key
 
 

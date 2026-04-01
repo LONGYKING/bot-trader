@@ -52,7 +52,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             )
         )
         result = await self.session.execute(stmt)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def list_by_channel(self, channel_id: uuid.UUID) -> list[Subscription]:
         stmt = (

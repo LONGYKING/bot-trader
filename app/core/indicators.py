@@ -117,7 +117,7 @@ def add_bollinger(
         Source price column (default ``"close"``).
     """
     df = _ensure_copy(df)
-    result = ta.bbands(df[col], length=period, std=std)
+    result = ta.bbands(df[col], length=period, std=std)  # type: ignore[arg-type]
     if result is not None and not result.empty:
         cols = result.columns.tolist()
         upper_col = next((c for c in cols if "BBU" in c), None)
