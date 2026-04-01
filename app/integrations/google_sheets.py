@@ -5,10 +5,10 @@ Creates three tabs: Summary, Trades, Equity Curve.
 Shares with "anyone with link → viewer".
 Returns the spreadsheet URL.
 """
-import json
 import asyncio
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+import json
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 import gspread_asyncio
 from google.oauth2.service_account import Credentials
@@ -80,7 +80,7 @@ async def export_backtest_to_sheets(
         ["Sharpe Ratio", f"{result.sharpe_ratio:.2f}"],
         ["Max Drawdown %", f"{result.max_drawdown_pct:.2f}%"],
         ["Annual Return %", f"{result.annual_return_pct:.2f}%"],
-        ["Generated At", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")],
+        ["Generated At", datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")],
     ]
     await summary_sheet.update("A1", summary_rows)
 
@@ -93,7 +93,7 @@ async def export_backtest_to_sheets(
         "Capital Before ($)", "Capital After ($)", "Premium Paid ($)",
         "Trade Size ($)", "Max Exposure ($)", "Regime",
     ]
-    trade_rows = [trade_headers]
+    trade_rows: list[list[Any]] = [trade_headers]
     for t in result.trades:
         trade_rows.append([
             str(t.entry_time)[:19] if hasattr(t.entry_time, '__str__') else t.entry_time,
@@ -117,7 +117,7 @@ async def export_backtest_to_sheets(
     equity_sheet = await spreadsheet.add_worksheet(title="Equity Curve", rows=max(len(result.equity_curve) + 2, 10), cols=3)
 
     equity_headers = ["Time", "Portfolio Value"]
-    equity_rows = [equity_headers]
+    equity_rows: list[list[Any]] = [equity_headers]
     for point in result.equity_curve:
         equity_rows.append([
             str(point["time"])[:19],

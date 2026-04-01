@@ -5,8 +5,8 @@ from sqlalchemy import text
 
 from app.api.v1 import admin, backtests, channels, outcomes, signals, strategies, subscriptions
 from app.config import get_settings
-from app.db.session import get_engine
 from app.db.redis import get_redis
+from app.db.session import get_engine
 from app.schemas.common import HealthResponse
 
 logger = structlog.get_logger(__name__)

@@ -3,6 +3,7 @@ ccxt async client factory with connection pooling per exchange_id.
 """
 import asyncio
 from typing import Any
+
 import ccxt.async_support as ccxt
 
 _clients: dict[str, Any] = {}

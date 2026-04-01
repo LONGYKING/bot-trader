@@ -1,8 +1,18 @@
 import random
+from typing import Any
 
 from app.formatters.base import AbstractFormatter
+from app.types.signal import SignalData
 
 # Maps signal_value → (emoji, label)
+_SIGNAL_MAP: dict[int, tuple[str, str]] = {
+    7: ("🚀", "STRONG BUY"),
+    3: ("📈", "BUY"),
+    -3: ("📉", "SELL"),
+    -7: ("🔻", "STRONG SELL"),
+    0: ("⏸", "NEUTRAL"),
+}
+
 _SCAN_LINES = [
     "Combing through the candles...",
     "Watching the tape closely...",
@@ -30,86 +40,61 @@ _LOSS_LINES = [
     "Stop respected. Capital protected. Next signal incoming.",
 ]
 
-_SIGNAL_MAP: dict[int, tuple[str, str]] = {
-    7: ("🚀", "STRONG BUY"),
-    3: ("📈", "BUY"),
-    -3: ("📉", "SELL"),
-    -7: ("🔻", "STRONG SELL"),
-    0: ("⏸", "NEUTRAL"),
-}
-
 _DIVIDER = "━━━━━━━━━━━━━━━━"
 
 
 def _format_regime(regime: str) -> str:
-    """Convert snake_case regime to Title Case."""
     return regime.replace("_", " ").title()
 
 
-def _format_indicators(snapshot: dict) -> str:
-    """Render indicator snapshot as 'Key: Value | Key: Value' string."""
+def _format_indicators(snapshot: dict[str, Any]) -> str:
     parts: list[str] = []
     for key, value in snapshot.items():
         label = key.replace("_", " ").upper()
-        if isinstance(value, float):
-            parts.append(f"{label}: {value:g}")
-        else:
-            parts.append(f"{label}: {value}")
+        parts.append(f"{label}: {value:g}" if isinstance(value, float) else f"{label}: {value}")
     return " | ".join(parts)
 
 
 class TelegramFormatter(AbstractFormatter):
-    def format_signal(self, signal_data: dict) -> str:
-        signal_value: int = signal_data.get("signal_value", 0)
-        asset: str = signal_data.get("asset", "UNKNOWN")
-        direction: str | None = signal_data.get("direction")
-        tenor_days: int | None = signal_data.get("tenor_days")
-        confidence: float | None = signal_data.get("confidence")
-        regime: str | None = signal_data.get("regime")
-        entry_price: float | None = signal_data.get("entry_price")
-        rule_triggered: str | None = signal_data.get("rule_triggered")
-        indicator_snapshot: dict | None = signal_data.get("indicator_snapshot")
-
-        emoji, label = _SIGNAL_MAP.get(signal_value, ("⏸", "NEUTRAL"))
+    def format_signal(self, signal_data: SignalData) -> str:
+        emoji, label = _SIGNAL_MAP.get(signal_data.signal_value, ("⏸", "NEUTRAL"))
 
         lines: list[str] = [
-            f"{emoji} <b>{label} — {asset}</b>",
+            f"{emoji} <b>{label} — {signal_data.asset}</b>",
             _DIVIDER,
         ]
 
-        # Direction + tenor line
-        if direction is not None or tenor_days is not None:
-            dir_str = direction or "—"
-            tenor_str = f"{tenor_days} days" if tenor_days is not None else "—"
+        if signal_data.direction is not None or signal_data.tenor_days is not None:
+            dir_str = signal_data.direction or "—"
+            tenor_str = f"{signal_data.tenor_days} days" if signal_data.tenor_days is not None else "—"
             lines.append(f"📊 <b>Direction:</b> {dir_str} | Tenor: {tenor_str}")
 
-        if entry_price is not None:
-            lines.append(f"💰 <b>Entry Price:</b> ${entry_price:,.2f}")
+        if signal_data.entry_price is not None:
+            lines.append(f"💰 <b>Entry Price:</b> ${signal_data.entry_price:,.2f}")
 
-        if confidence is not None:
-            lines.append(f"🎯 <b>Confidence:</b> {confidence * 100:.1f}%")
+        if signal_data.confidence is not None:
+            lines.append(f"🎯 <b>Confidence:</b> {signal_data.confidence * 100:.1f}%")
 
-        if regime is not None:
-            lines.append(f"📈 <b>Regime:</b> {_format_regime(regime)}")
+        if signal_data.regime is not None:
+            lines.append(f"📈 <b>Regime:</b> {_format_regime(signal_data.regime)}")
 
-        if rule_triggered is not None:
-            # Strip "Test signal — " prefix for cleaner display when it appears
-            display_rule = rule_triggered
-            if display_rule.startswith("Test signal — "):
-                display_rule = display_rule[len("Test signal — "):]
-            lines.append(f"🔍 <b>Trigger:</b> {display_rule}")
+        if signal_data.rule_triggered is not None:
+            rule = signal_data.rule_triggered
+            if rule.startswith("Test signal — "):
+                rule = rule[len("Test signal — "):]
+            lines.append(f"🔍 <b>Trigger:</b> {rule}")
 
-        if indicator_snapshot:
-            lines.append(f"📉 <b>Indicators:</b> {_format_indicators(indicator_snapshot)}")
+        if signal_data.indicator_snapshot:
+            lines.append(f"📉 <b>Indicators:</b> {_format_indicators(signal_data.indicator_snapshot)}")
 
         lines.append(_DIVIDER)
 
-        if tenor_days is not None:
-            lines.append(f"⏱ Expires in {tenor_days} days")
+        if signal_data.tenor_days is not None:
+            lines.append(f"⏱ Expires in {signal_data.tenor_days} days")
 
         return "\n".join(lines)
 
-    def format_neutral(self, data: dict) -> str:
+    def format_neutral(self, data: dict[str, Any]) -> str:
         asset: str = data.get("asset", "UNKNOWN")
         timeframe: str = data.get("timeframe", "")
         price: float | None = data.get("current_price")
@@ -142,7 +127,7 @@ class TelegramFormatter(AbstractFormatter):
         ]
         return "\n".join(lines)
 
-    def format_outcome(self, data: dict) -> str:
+    def format_outcome(self, data: dict[str, Any]) -> str:
         asset: str = data.get("asset", "UNKNOWN")
         direction: str = (data.get("direction") or "").upper()
         tenor_days: int | None = data.get("tenor_days")

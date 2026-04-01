@@ -1,9 +1,12 @@
 """
-scheduled_signals arq job — runs every 15 minutes.
+scheduled_signals arq job — runs every 5 minutes.
 
-Generates signals for all active strategies by invoking the
-signal_service pipeline for each one.
+Each strategy has its own configurable interval (strategy.interval_minutes,
+default 15). A Redis key tracks the last run time per strategy so strategies
+with longer intervals are skipped on cycles that fall within their cooldown.
 """
+import time
+
 import structlog
 
 from app.repositories.strategy import StrategyRepository
@@ -38,8 +41,25 @@ async def scheduled_signals(ctx: dict) -> dict:
 
         log.info("scheduled_signals.strategies_found", count=len(active_strategies))
 
+        redis = ctx["redis"]
+
         for strategy in active_strategies:
             strategy_log = log.bind(strategy_id=str(strategy.id), strategy_name=strategy.name)
+
+            # Per-strategy interval check
+            last_run_key = f"signal:last_run:{strategy.id}"
+            last_run = await redis.get(last_run_key)
+            if last_run:
+                elapsed = time.time() - float(last_run)
+                interval_seconds = strategy.interval_minutes * 60
+                if elapsed < interval_seconds:
+                    strategy_log.debug(
+                        "scheduled_signals.interval_not_reached",
+                        elapsed_seconds=round(elapsed),
+                        interval_minutes=strategy.interval_minutes,
+                    )
+                    continue
+
             strategies_processed += 1
             try:
                 async with ctx["session_factory"]() as session:
@@ -62,7 +82,10 @@ async def scheduled_signals(ctx: dict) -> dict:
 
             except Exception as exc:  # noqa: BLE001
                 strategy_log.exception("scheduled_signals.strategy_error", error=str(exc))
-                # Continue processing remaining strategies
+            finally:
+                # Record last run time regardless of outcome
+                ttl = strategy.interval_minutes * 60 * 2
+                await redis.set(last_run_key, str(time.time()), ex=ttl)
 
     except Exception as exc:  # noqa: BLE001
         log.exception("scheduled_signals.failed", error=str(exc))

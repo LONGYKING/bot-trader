@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, case, select, update
 
 from app.models.signal import Signal
 from app.repositories.base import BaseRepository
@@ -9,6 +9,16 @@ from app.repositories.base import BaseRepository
 
 class SignalRepository(BaseRepository[Signal]):
     model = Signal
+
+    async def get_latest_for_strategy(self, strategy_id: uuid.UUID) -> "Signal | None":
+        stmt = (
+            select(Signal)
+            .where(Signal.strategy_id == strategy_id)
+            .order_by(Signal.entry_time.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().first()
 
     async def get_by_strategy(
         self,
@@ -106,13 +116,17 @@ class SignalRepository(BaseRepository[Signal]):
         ids: list[uuid.UUID],
         values: dict[uuid.UUID, bool],
     ) -> None:
-        for signal_id in ids:
-            profitable = values.get(signal_id)
-            if profitable is None:
-                continue
-            stmt = (
-                update(Signal)
-                .where(Signal.id == signal_id)
-                .values(is_profitable=profitable)
+        """Update is_profitable for multiple signals in a single statement."""
+        if not ids:
+            return
+        stmt = (
+            update(Signal)
+            .where(Signal.id.in_(ids))
+            .values(
+                is_profitable=case(
+                    *[(Signal.id == sid, val) for sid, val in values.items()],
+                    else_=Signal.is_profitable,
+                )
             )
-            await self.session.execute(stmt)
+        )
+        await self.session.execute(stmt)

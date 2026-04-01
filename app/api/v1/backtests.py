@@ -3,11 +3,9 @@ from typing import Annotated
 
 from arq import ArqRedis
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.redis import get_arq_pool
-from app.db.session import get_db
-from app.dependencies import PaginationParams, require_scope
+from app.dependencies import DBSession, PaginationParams, require_scope
 from app.models.api_key import ApiKey
 from app.schemas.backtest import BacktestCreate, BacktestResponse, BacktestTradeResponse
 from app.schemas.common import PaginatedResponse
@@ -19,8 +17,8 @@ router = APIRouter(prefix="/backtests")
 @router.post("", response_model=BacktestResponse, status_code=status.HTTP_202_ACCEPTED)
 async def submit_backtest(
     body: BacktestCreate,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    redis: Annotated[ArqRedis, Depends(get_arq_pool)] = None,
+    session: DBSession,
+    redis: Annotated[ArqRedis, Depends(get_arq_pool)],
     _: ApiKey = Depends(require_scope("write:strategies")),
 ):
     """Submit a backtest job. Returns 202 Accepted."""
@@ -29,10 +27,10 @@ async def submit_backtest(
 
 @router.get("", response_model=PaginatedResponse[BacktestResponse])
 async def list_backtests(
+    session: DBSession,
+    _: ApiKey = Depends(require_scope("read:strategies")),
     strategy_id: uuid.UUID | None = None,
     pagination: PaginationParams = Depends(),
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    _: ApiKey = Depends(require_scope("read:strategies")),
 ):
     """List backtests with optional strategy_id filter. Paginated."""
     items, total = await backtest_service.list_backtests(
@@ -54,7 +52,7 @@ async def list_backtests(
 @router.get("/{id}", response_model=BacktestResponse)
 async def get_backtest(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:strategies")),
 ):
     """Get backtest status and results by id."""
@@ -64,9 +62,9 @@ async def get_backtest(
 @router.get("/{id}/trades", response_model=PaginatedResponse[BacktestTradeResponse])
 async def get_backtest_trades(
     id: uuid.UUID,
-    pagination: PaginationParams = Depends(),
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:strategies")),
+    pagination: PaginationParams = Depends(),
 ):
     """Return paginated trade log for a backtest."""
     items, total = await backtest_service.get_trades(
@@ -88,7 +86,7 @@ async def get_backtest_trades(
 @router.get("/{id}/equity-curve")
 async def get_equity_curve(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:strategies")),
 ):
     """Return equity curve data for a backtest as a list of trade snapshots."""
@@ -98,8 +96,8 @@ async def get_equity_curve(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_backtest(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    redis: Annotated[ArqRedis, Depends(get_arq_pool)] = None,
+    session: DBSession,
+    redis: Annotated[ArqRedis, Depends(get_arq_pool)],
     _: ApiKey = Depends(require_scope("write:strategies")),
 ):
     """Cancel a pending or running backtest."""

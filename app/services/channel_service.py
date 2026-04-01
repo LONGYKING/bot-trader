@@ -76,10 +76,10 @@ async def get_channel(session: AsyncSession, id: uuid.UUID) -> Channel:
     return channel
 
 
-async def list_channels(session: AsyncSession) -> list[Channel]:
-    """Return all active channels with decrypted configs."""
+async def list_channels(session: AsyncSession, limit: int = 100, offset: int = 0) -> list[Channel]:
+    """Return paginated active channels with decrypted configs."""
     repo = ChannelRepository(session)
-    return await repo.list_active()
+    return await repo.list_active(limit=limit, offset=offset)
 
 
 async def update_channel(

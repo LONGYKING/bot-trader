@@ -147,14 +147,15 @@ async def get_strategy_performance(session: AsyncSession, id: uuid.UUID) -> dict
 
     # Compute by-regime breakdown from signal outcomes joined with signals
     # We query signal_outcomes joined with signals filtered by strategy_id
-    from sqlalchemy import and_, func, select
+    from sqlalchemy import func, select
+
     from app.models.outcome import SignalOutcome
     from app.models.signal import Signal as SignalModel
 
     by_regime_stmt = (
         select(
             SignalModel.regime,
-            func.count(SignalOutcome.id).label("count"),
+            func.count(SignalOutcome.id).label("signal_count"),
             func.avg(SignalOutcome.pnl_pct).label("avg_pnl_pct"),
             func.sum(
                 func.cast(SignalOutcome.is_profitable, type_=func.count().type)
@@ -168,7 +169,7 @@ async def get_strategy_performance(session: AsyncSession, id: uuid.UUID) -> dict
     by_regime: dict[str, Any] = {}
     for row in regime_result.all():
         regime_key = row.regime or "unknown"
-        count = row.count or 0
+        count = int(row.signal_count or 0)
         winning = int(row.winning or 0)
         by_regime[regime_key] = {
             "count": count,

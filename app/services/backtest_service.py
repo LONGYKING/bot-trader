@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +28,7 @@ async def submit_backtest(
     if strategy is None:
         raise NotFoundError("Strategy", str(strategy_id))
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     backtest_data = {
         "strategy_id": strategy_id,
         "status": "pending",

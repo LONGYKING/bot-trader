@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +33,7 @@ async def fan_out_signal(
         return 0
 
     delivery_repo = DeliveryRepository(session)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     created_count = 0
 
     for subscription, channel in matches:

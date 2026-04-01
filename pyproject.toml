@@ -63,8 +63,35 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
-ignore = ["E501"]
+select = ["E", "F", "I", "UP", "B", "C9", "PLR"]
+ignore = [
+    "PLR0913",   # too-many-arguments — common in service/repo layer
+    "B008",      # Depends() in argument defaults — standard FastAPI pattern
+    "PLR2004",   # magic-value comparisons — HTTP status codes and domain constants are readable in context
+    "UP046",     # Generic[T] subclass style — mechanical 3.12 upgrade, deferred
+    "E501",      # line too long — formatter handles display; long f-strings/URLs are acceptable
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/core/market_data.py" = ["C901", "E741", "B905"]  # complex exchange fetch; l=low is OHLCV standard
+"app/core/backtest_engine.py" = ["C901"]      # stateful simulation loop
+"app/workers/deliver_signal.py" = ["C901", "PLR0912", "PLR0915", "PLR0911"]  # fan-out job — inherent branching
+"app/workers/retry_delivery.py" = ["PLR0915"]  # retry state machine — linear but verbose
+"app/formatters/email.py" = ["C901", "PLR0912", "PLR0915"]  # multi-section HTML formatter — unavoidable branches
+"app/channels/exchange.py" = ["PLR0911"]      # gating method has multiple early-returns by design
+"app/core/regime_detector.py" = ["UP042", "PLR0911", "PLR0912"]  # str+Enum pattern; classify returns per regime
+"app/strategies/vwap_reversion.py" = ["PLR0911"]  # generate_signal returns per condition by design
+"app/workers/run_backtest.py" = ["PLR0915", "C901"]   # backtest pipeline — sequential steps, unavoidably long
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+disallow_untyped_defs = true
+ignore_missing_imports = true
+exclude = ["alembic/", "tests/"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,14 +1,16 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+from app.types.signal import SignalData
+
 
 class AbstractFormatter(ABC):
     @abstractmethod
-    def format_signal(self, signal_data: dict) -> Any:
-        """Format signal data dict into channel-native message format."""
+    def format_signal(self, signal_data: SignalData) -> Any:
+        """Format a typed signal payload into a channel-native message."""
         ...
 
-    def format_neutral(self, data: dict) -> Any:
+    def format_neutral(self, data: dict[str, Any]) -> Any:
         """Format a neutral market-scan update. Override for richer channel output.
 
         data keys: asset, timeframe, current_price, regime, indicator_snapshot, strategy_name
@@ -26,7 +28,7 @@ class AbstractFormatter(ABC):
             lines.append(f"Indicators: {ind_str}")
         return "\n".join(lines)
 
-    def format_outcome(self, data: dict) -> Any:
+    def format_outcome(self, data: dict[str, Any]) -> Any:
         """Format a trade outcome notification. Override for richer channel output.
 
         data keys: asset, direction, tenor_days, entry_price, exit_price,
@@ -42,22 +44,23 @@ class AbstractFormatter(ABC):
         exit_p = data.get("exit_price")
         lines = [
             f"[{status}] Trade Closed — {asset}",
-            f"{direction} {tenor}d | Entry: {'${:,.2f}'.format(entry) if entry else 'N/A'} → Exit: {'${:,.2f}'.format(exit_p) if exit_p else 'N/A'}",
+            f"{direction} {tenor}d | Entry: {f'${entry:,.2f}' if entry else 'N/A'} → Exit: {f'${exit_p:,.2f}' if exit_p else 'N/A'}",
             f"PnL: {pnl:+.2f}%",
         ]
         return "\n".join(lines)
 
     def format_test(self) -> Any:
         return self.format_signal(
-            {
-                "asset": "BTC/USDT",
-                "signal_value": 7,
-                "direction": "CALL",
-                "tenor_days": 7,
-                "confidence": 0.85,
-                "regime": "strong_trend_up",
-                "entry_price": 65000.0,
-                "rule_triggered": "Test signal — RSI oversold + MACD bullish crossover",
-                "indicator_snapshot": {"rsi": 28.5, "macd_hist": 0.0023},
-            }
+            SignalData(
+                asset="BTC/USDT",
+                signal_value=7,
+                trade_type="options",
+                direction="call",
+                tenor_days=7,
+                confidence=0.85,
+                regime="strong_trend_up",
+                entry_price=65000.0,
+                rule_triggered="Test signal — RSI oversold + MACD bullish crossover",
+                indicator_snapshot={"rsi": 28.5, "macd_hist": 0.0023},
+            )
         )

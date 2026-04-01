@@ -1,11 +1,9 @@
 import uuid
-from typing import Annotated
+from datetime import datetime
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.db.session import get_db
-from app.dependencies import PaginationParams, require_scope
+from app.dependencies import DBSession, PaginationParams, require_scope
 from app.models.api_key import ApiKey
 from app.schemas.common import PaginatedResponse
 from app.schemas.outcome import OutcomeResponse, OutcomeStats
@@ -16,18 +14,16 @@ router = APIRouter(prefix="/outcomes")
 
 @router.get("", response_model=PaginatedResponse[OutcomeResponse])
 async def list_outcomes(
+    session: DBSession,
+    _: ApiKey = Depends(require_scope("read:signals")),
     is_profitable: bool | None = None,
     asset: str | None = None,
     strategy_id: uuid.UUID | None = None,
     from_dt: str | None = None,
     to_dt: str | None = None,
     pagination: PaginationParams = Depends(),
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    _: ApiKey = Depends(require_scope("read:signals")),
 ):
     """List outcomes with optional filters. Paginated."""
-    from datetime import datetime
-
     filters: dict = {}
     if is_profitable is not None:
         filters["is_profitable"] = is_profitable
@@ -35,10 +31,18 @@ async def list_outcomes(
         filters["asset"] = asset
     if strategy_id is not None:
         filters["strategy_id"] = strategy_id
-    if from_dt is not None:
-        filters["from_dt"] = datetime.fromisoformat(from_dt)
-    if to_dt is not None:
-        filters["to_dt"] = datetime.fromisoformat(to_dt)
+
+    parsed_from = datetime.fromisoformat(from_dt) if from_dt is not None else None
+    parsed_to = datetime.fromisoformat(to_dt) if to_dt is not None else None
+    if parsed_from is not None and parsed_to is not None and parsed_from > parsed_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="from_dt must be before to_dt",
+        )
+    if parsed_from is not None:
+        filters["from_dt"] = parsed_from
+    if parsed_to is not None:
+        filters["to_dt"] = parsed_to
 
     items, total = await outcome_service.list_outcomes(
         session,
@@ -58,10 +62,10 @@ async def list_outcomes(
 
 @router.get("/stats", response_model=OutcomeStats)
 async def get_outcome_stats(
+    session: DBSession,
+    _: ApiKey = Depends(require_scope("read:signals")),
     asset: str | None = None,
     strategy_id: uuid.UUID | None = None,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    _: ApiKey = Depends(require_scope("read:signals")),
 ):
     """Return aggregate outcome statistics with optional asset/strategy filters."""
     stats = await outcome_service.get_stats(session, asset=asset, strategy_id=strategy_id)
@@ -75,7 +79,7 @@ async def get_outcome_stats(
 
 @router.post("/resolve")
 async def resolve_outcomes(
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Manually trigger resolution of all expired unresolved signals (admin only)."""
@@ -86,7 +90,7 @@ async def resolve_outcomes(
 @router.get("/{signal_id}", response_model=OutcomeResponse)
 async def get_outcome(
     signal_id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:signals")),
 ):
     """Return the outcome for a specific signal by signal_id."""

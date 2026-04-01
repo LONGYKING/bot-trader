@@ -14,10 +14,9 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import BaseModel, Field
 
+from app.core.indicators import add_adx, add_rsi
 from app.strategies.base import BaseStrategy, SignalResult
 from app.strategies.registry import StrategyRegistry
-from app.core.indicators import add_adx, add_rsi
-
 
 # ---------------------------------------------------------------------------
 # Parameter model

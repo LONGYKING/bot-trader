@@ -5,7 +5,7 @@ Loads a Backtest record, fetches OHLCV data, runs the backtest engine,
 persists trade records, and optionally exports results to Google Sheets.
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 
@@ -76,6 +76,8 @@ async def run_backtest(ctx: dict, backtest_id: str) -> dict:
 
                 # Reload backtest after status update
                 backtest = await repo.get_by_id(backtest_uuid)
+                if backtest is None:
+                    raise ValueError(f"Backtest {backtest_uuid} not found after status update")
                 strategy = await strategy_repo.get_by_id(backtest.strategy_id)
 
                 if strategy is None:
@@ -92,10 +94,10 @@ async def run_backtest(ctx: dict, backtest_id: str) -> dict:
 
                 # Convert date objects to datetime (midnight UTC)
                 date_from_dt = datetime.combine(backtest.date_from, datetime.min.time()).replace(
-                    tzinfo=timezone.utc
+                    tzinfo=UTC
                 )
                 date_to_dt = datetime.combine(backtest.date_to, datetime.min.time()).replace(
-                    tzinfo=timezone.utc
+                    tzinfo=UTC
                 )
 
                 df = await fetch_ohlcv_range(

@@ -321,7 +321,7 @@ _EXECUTION_MODELS: dict[str, type] = {
 # ---------------------------------------------------------------------------
 
 def run_backtest(
-    strategy: "BaseStrategy",
+    strategy: BaseStrategy,
     df: pd.DataFrame,
     initial_capital: float = 10_000.0,
     trade_type: str = "options",
@@ -363,7 +363,7 @@ def run_backtest(
 # ---------------------------------------------------------------------------
 
 def _build_result(
-    strategy: "BaseStrategy",
+    strategy: BaseStrategy,
     df: pd.DataFrame,
     initial_capital: float,
     trades: list[TradeRecord],

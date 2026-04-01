@@ -1,15 +1,17 @@
 import uuid
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
-from app.dependencies import PaginationParams, require_scope
+from app.dependencies import DBSession, PaginationParams, require_scope
 from app.models.api_key import ApiKey
 from app.schemas.common import PaginatedResponse
 from app.schemas.signal import SignalResponse
-from app.schemas.strategy import StrategyCreate, StrategyPerformance, StrategyResponse, StrategyUpdate
+from app.schemas.strategy import (
+    StrategyCreate,
+    StrategyPerformance,
+    StrategyResponse,
+    StrategyUpdate,
+)
 from app.services import strategy_service
 
 router = APIRouter(prefix="/strategies")
@@ -31,13 +33,13 @@ async def list_strategy_classes():
 
 @router.get("", response_model=PaginatedResponse[StrategyResponse])
 async def list_strategies(
+    session: DBSession,
+    _: ApiKey = Depends(require_scope("read:strategies")),
     asset: str | None = None,
     timeframe: str | None = None,
     is_active: bool | None = None,
     strategy_class: str | None = None,
     pagination: PaginationParams = Depends(),
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    _: ApiKey = Depends(require_scope("read:strategies")),
 ):
     """List strategies with optional filters. Paginated."""
     items, total = await strategy_service.list_strategies(
@@ -62,7 +64,7 @@ async def list_strategies(
 @router.post("", response_model=StrategyResponse, status_code=status.HTTP_201_CREATED)
 async def create_strategy(
     body: StrategyCreate,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("write:strategies")),
 ):
     """Create a new strategy."""
@@ -72,7 +74,7 @@ async def create_strategy(
 @router.get("/{id}", response_model=StrategyResponse)
 async def get_strategy(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:strategies")),
 ):
     """Get a strategy by id."""
@@ -83,7 +85,7 @@ async def get_strategy(
 async def update_strategy(
     id: uuid.UUID,
     body: StrategyUpdate,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("write:strategies")),
 ):
     """Partially update a strategy."""
@@ -94,7 +96,7 @@ async def update_strategy(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_strategy(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("write:strategies")),
 ):
     """Soft-delete a strategy (sets is_active=False)."""
@@ -104,9 +106,9 @@ async def delete_strategy(
 @router.get("/{id}/signals", response_model=PaginatedResponse[SignalResponse])
 async def list_strategy_signals(
     id: uuid.UUID,
-    pagination: PaginationParams = Depends(),
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:strategies")),
+    pagination: PaginationParams = Depends(),
 ):
     """List all signals for a specific strategy. Paginated."""
     from app.services import signal_service
@@ -133,7 +135,7 @@ async def list_strategy_signals(
 @router.get("/{id}/performance", response_model=StrategyPerformance)
 async def get_strategy_performance(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:strategies")),
 ):
     """Return performance summary for a strategy."""

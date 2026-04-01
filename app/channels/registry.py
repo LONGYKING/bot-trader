@@ -1,21 +1,20 @@
-from typing import Type
 
 from app.channels.base import AbstractChannel
 
 
 class ChannelRegistry:
-    _registry: dict[str, Type[AbstractChannel]] = {}
+    _registry: dict[str, type[AbstractChannel]] = {}
 
     @classmethod
     def register(cls, channel_type: str):
-        def decorator(klass: Type[AbstractChannel]) -> Type[AbstractChannel]:
+        def decorator(klass: type[AbstractChannel]) -> type[AbstractChannel]:
             cls._registry[channel_type] = klass
             return klass
 
         return decorator
 
     @classmethod
-    def get(cls, channel_type: str) -> Type[AbstractChannel]:
+    def get(cls, channel_type: str) -> type[AbstractChannel]:
         if channel_type not in cls._registry:
             raise ValueError(
                 f"Channel type '{channel_type}' not registered. "

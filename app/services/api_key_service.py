@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,14 +63,14 @@ async def authenticate(
     Authenticate a raw API key. Returns ApiKey or raises AuthenticationError.
     Updates last_used_at on success.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     api_key = await get_api_key_by_raw(session, raw_key)
 
     if api_key is None:
         raise AuthenticationError()
     if not api_key.is_active:
         raise AuthenticationError("API key is inactive")
-    if api_key.expires_at and api_key.expires_at.astimezone(timezone.utc) < now:
+    if api_key.expires_at and api_key.expires_at.astimezone(UTC) < now:
         raise AuthenticationError("API key has expired")
 
     repo = ApiKeyRepository(session)

@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.types.strategy import StrategyRiskConfig
+
 
 class StrategyCreate(BaseModel):
     name: str
@@ -14,6 +16,8 @@ class StrategyCreate(BaseModel):
     params: dict = Field(default_factory=dict)
     trade_type: str = "options"
     execution_params: dict = Field(default_factory=dict)
+    interval_minutes: int = 15
+    risk_config: StrategyRiskConfig = Field(default_factory=StrategyRiskConfig)
 
 
 class StrategyUpdate(BaseModel):
@@ -22,6 +26,8 @@ class StrategyUpdate(BaseModel):
     params: dict | None = None
     trade_type: str | None = None
     execution_params: dict | None = None
+    interval_minutes: int | None = None
+    risk_config: StrategyRiskConfig | None = None
     is_active: bool | None = None
 
 
@@ -36,6 +42,8 @@ class StrategyResponse(BaseModel):
     params: dict
     trade_type: str
     execution_params: dict
+    interval_minutes: int
+    risk_config: StrategyRiskConfig
     is_active: bool
     version: int
     created_at: datetime

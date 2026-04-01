@@ -1,18 +1,21 @@
 import uuid
+from datetime import datetime
 from typing import Annotated
 
 from arq import ArqRedis
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.db.redis import get_arq_pool
-from app.db.session import get_db
-from app.dependencies import PaginationParams, require_scope
+from app.dependencies import DBSession, PaginationParams, require_scope
 from app.models.api_key import ApiKey
 from app.schemas.common import PaginatedResponse
 from app.schemas.delivery import DeliveryResponse
 from app.schemas.outcome import OutcomeResponse
-from app.schemas.signal import SignalForceRequest, SignalGenerateRequest, SignalListParams, SignalResponse
+from app.schemas.signal import (
+    SignalForceRequest,
+    SignalGenerateRequest,
+    SignalResponse,
+)
 from app.services import delivery_service, outcome_service, signal_service
 
 router = APIRouter(prefix="/signals")
@@ -20,6 +23,8 @@ router = APIRouter(prefix="/signals")
 
 @router.get("", response_model=PaginatedResponse[SignalResponse])
 async def list_signals(
+    session: DBSession,
+    _: ApiKey = Depends(require_scope("read:signals")),
     strategy_id: uuid.UUID | None = None,
     asset: str | None = None,
     signal_value: int | None = None,
@@ -27,12 +32,8 @@ async def list_signals(
     to_dt: str | None = None,
     is_profitable: bool | None = None,
     pagination: PaginationParams = Depends(),
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    _: ApiKey = Depends(require_scope("read:signals")),
 ):
     """List signals with optional filters. Paginated."""
-    from datetime import datetime
-
     filters: dict = {}
     if strategy_id is not None:
         filters["strategy_id"] = strategy_id
@@ -40,10 +41,19 @@ async def list_signals(
         filters["asset"] = asset
     if signal_value is not None:
         filters["signal_value"] = signal_value
-    if from_dt is not None:
-        filters["from_dt"] = datetime.fromisoformat(from_dt)
-    if to_dt is not None:
-        filters["to_dt"] = datetime.fromisoformat(to_dt)
+
+    parsed_from = datetime.fromisoformat(from_dt) if from_dt is not None else None
+    parsed_to = datetime.fromisoformat(to_dt) if to_dt is not None else None
+    if parsed_from is not None and parsed_to is not None and parsed_from > parsed_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="from_dt must be before to_dt",
+        )
+    if parsed_from is not None:
+        filters["from_dt"] = parsed_from
+    if parsed_to is not None:
+        filters["to_dt"] = parsed_to
+
     if is_profitable is not None:
         filters["is_profitable"] = is_profitable
 
@@ -66,8 +76,8 @@ async def list_signals(
 @router.post("/generate")
 async def generate_signal(
     body: SignalGenerateRequest,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    redis: Annotated[ArqRedis, Depends(get_arq_pool)] = None,
+    session: DBSession,
+    redis: Annotated[ArqRedis, Depends(get_arq_pool)],
     _: ApiKey = Depends(require_scope("write:signals")),
 ):
     """Trigger immediate signal generation for a strategy."""
@@ -80,8 +90,8 @@ async def generate_signal(
 @router.post("/force")
 async def force_signal(
     body: SignalForceRequest,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    redis: Annotated[ArqRedis, Depends(get_arq_pool)] = None,
+    session: DBSession,
+    redis: Annotated[ArqRedis, Depends(get_arq_pool)],
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Force a signal with a specific value, bypassing strategy computation.
@@ -98,7 +108,7 @@ async def force_signal(
 @router.get("/{id}", response_model=SignalResponse)
 async def get_signal(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:signals")),
 ):
     """Get full signal detail by id."""
@@ -108,7 +118,7 @@ async def get_signal(
 @router.get("/{id}/deliveries", response_model=list[DeliveryResponse])
 async def get_signal_deliveries(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:signals")),
 ):
     """Return all delivery attempts for a signal."""
@@ -120,7 +130,7 @@ async def get_signal_deliveries(
 @router.get("/{id}/outcome", response_model=OutcomeResponse)
 async def get_signal_outcome(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("read:signals")),
 ):
     """Return the outcome for a specific signal."""

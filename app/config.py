@@ -1,7 +1,7 @@
-import json
 import os
 from functools import lru_cache
 from typing import Literal
+
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -48,6 +48,32 @@ class Settings(BaseSettings):
     # Notifications
     # When True, subscribers receive a "market scan" message even when no signal fires
     send_neutral_signals: bool = False
+
+    # Delivery & retry
+    retry_max_attempts: int = 5
+    retry_base_delay_seconds: int = 30
+    retry_max_delay_seconds: int = 960
+
+    # Circuit breaker
+    circuit_breaker_failure_threshold: int = 5
+    circuit_breaker_recovery_timeout_seconds: int = 300
+    circuit_breaker_window_seconds: int = 60
+
+    # API rate limiting
+    api_rate_limit_requests: int = 60
+    api_rate_limit_window_seconds: int = 60
+
+    # Channel defaults
+    default_channel_timeout_seconds: int = 30
+    default_position_size_pct: float = 0.05
+
+    # Market data
+    ohlcv_min_bars: int = 50
+    ohlcv_default_limit: int = 500
+
+    # Worker
+    worker_max_jobs: int = 20
+    worker_job_timeout: int = 600
 
     @field_validator("secret_key")
     @classmethod

@@ -1,6 +1,7 @@
 from typing import Annotated
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Security
+from fastapi.security import APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -8,11 +9,26 @@ from app.exceptions import AuthenticationError, AuthorizationError
 from app.models.api_key import ApiKey
 from app.services import api_key_service
 
+# ---------------------------------------------------------------------------
+# Reusable type aliases
+# ---------------------------------------------------------------------------
+
+DBSession = Annotated[AsyncSession, Depends(get_db)]
+"""Inject an async DB session. Use as a route parameter type instead of
+``Annotated[AsyncSession, Depends(get_db)]``."""
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+_api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
+"""Registers ``X-API-Key`` as an apiKey security scheme in the OpenAPI spec,
+enabling the global Authorize button in Swagger UI."""
+
 
 async def get_current_api_key(
-    request: Request,
-    x_api_key: Annotated[str | None, Header()] = None,
-    session: AsyncSession = Depends(get_db),
+    session: DBSession,
+    x_api_key: Annotated[str | None, Security(_api_key_scheme)] = None,
 ) -> ApiKey:
     """FastAPI dependency: validates X-API-Key header, returns ApiKey model."""
     if not x_api_key:

@@ -14,10 +14,9 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import BaseModel, Field, model_validator
 
+from app.core.indicators import add_ema
 from app.strategies.base import BaseStrategy, SignalResult
 from app.strategies.registry import StrategyRegistry
-from app.core.indicators import add_ema
-
 
 # ---------------------------------------------------------------------------
 # Parameter model
@@ -36,7 +35,7 @@ class EmaCrossoverParams(BaseModel):
     model_config = {"extra": "forbid"}
 
     @model_validator(mode="after")
-    def periods_must_be_ascending(self) -> "EmaCrossoverParams":
+    def periods_must_be_ascending(self) -> EmaCrossoverParams:
         if self.fast_period >= self.slow_period:
             raise ValueError(
                 f"fast_period ({self.fast_period}) must be less than slow_period ({self.slow_period})"

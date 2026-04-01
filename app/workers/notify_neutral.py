@@ -88,7 +88,7 @@ async def notify_neutral(
         async with session.begin():
             channel_repo = ChannelRepository(session)
 
-            for subscription, channel_row in pairs:
+            for _subscription, channel_row in pairs:
                 if channel_row.id in seen_channels:
                     continue
                 seen_channels.add(channel_row.id)

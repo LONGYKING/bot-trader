@@ -1,11 +1,8 @@
 import uuid
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
-from app.dependencies import PaginationParams, require_scope
+from app.dependencies import DBSession, PaginationParams, require_scope
 from app.models.api_key import ApiKey
 from app.schemas.common import PaginatedResponse
 from app.schemas.subscription import SubscriptionCreate, SubscriptionResponse, SubscriptionUpdate
@@ -16,12 +13,12 @@ router = APIRouter(prefix="/subscriptions")
 
 @router.get("", response_model=PaginatedResponse[SubscriptionResponse])
 async def list_subscriptions(
+    session: DBSession,
+    _: ApiKey = Depends(require_scope("admin")),
     channel_id: uuid.UUID | None = None,
     strategy_id: uuid.UUID | None = None,
     is_active: bool | None = None,
     pagination: PaginationParams = Depends(),
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
-    _: ApiKey = Depends(require_scope("admin")),
 ):
     """List subscriptions with optional filters. Paginated."""
     items, total = await subscription_service.list_subscriptions(
@@ -45,7 +42,7 @@ async def list_subscriptions(
 @router.post("", response_model=SubscriptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_subscription(
     body: SubscriptionCreate,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Create a new subscription linking a channel to a strategy (or all strategies)."""
@@ -55,7 +52,7 @@ async def create_subscription(
 @router.get("/{id}", response_model=SubscriptionResponse)
 async def get_subscription(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Get a subscription by id."""
@@ -66,7 +63,7 @@ async def get_subscription(
 async def update_subscription(
     id: uuid.UUID,
     body: SubscriptionUpdate,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Partially update a subscription."""
@@ -77,7 +74,7 @@ async def update_subscription(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_subscription(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Delete a subscription."""

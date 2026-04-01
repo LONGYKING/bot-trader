@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import insert, select, update
 
@@ -26,7 +26,7 @@ class BacktestRepository(BaseRepository[Backtest]):
             .values(
                 status="running",
                 arq_job_id=arq_job_id,
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
             )
         )
         await self.session.execute(stmt)
@@ -37,7 +37,7 @@ class BacktestRepository(BaseRepository[Backtest]):
             .where(Backtest.id == id)
             .values(
                 status="completed",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 total_trades=results.get("total_trades"),
                 winning_trades=results.get("winning_trades"),
                 win_rate=results.get("win_rate"),
@@ -56,7 +56,7 @@ class BacktestRepository(BaseRepository[Backtest]):
             .where(Backtest.id == id)
             .values(
                 status="failed",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 error_message=error,
             )
         )

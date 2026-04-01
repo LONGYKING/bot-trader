@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import and_, select, update
 
@@ -35,13 +35,13 @@ class DeliveryRepository(BaseRepository[SignalDelivery]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_pending_retries(self) -> list[SignalDelivery]:
+    async def get_pending_retries(self, max_attempts: int) -> list[SignalDelivery]:
         stmt = (
             select(SignalDelivery)
             .where(
                 and_(
                     SignalDelivery.status.in_(["pending", "retrying"]),
-                    SignalDelivery.attempt_count < 5,
+                    SignalDelivery.attempt_count < max_attempts,
                 )
             )
             .order_by(SignalDelivery.created_at)
@@ -53,27 +53,35 @@ class DeliveryRepository(BaseRepository[SignalDelivery]):
         self,
         id: uuid.UUID,
         external_msg_id: str | None = None,
+        delivery_metadata: dict | None = None,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             update(SignalDelivery)
-            .where(SignalDelivery.id == id)
+            .where(
+                SignalDelivery.id == id,
+                SignalDelivery.status.in_(["pending", "retrying"]),
+            )
             .values(
                 status="sent",
                 delivered_at=now,
                 last_attempt_at=now,
                 attempt_count=SignalDelivery.attempt_count + 1,
                 external_msg_id=external_msg_id,
+                delivery_metadata=delivery_metadata,
                 error_message=None,
             )
         )
         await self.session.execute(stmt)
 
     async def mark_failed(self, id: uuid.UUID, error: str) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             update(SignalDelivery)
-            .where(SignalDelivery.id == id)
+            .where(
+                SignalDelivery.id == id,
+                SignalDelivery.status == "pending",
+            )
             .values(
                 status="failed",
                 last_attempt_at=now,
@@ -84,10 +92,13 @@ class DeliveryRepository(BaseRepository[SignalDelivery]):
         await self.session.execute(stmt)
 
     async def mark_retrying(self, id: uuid.UUID, error: str) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             update(SignalDelivery)
-            .where(SignalDelivery.id == id)
+            .where(
+                SignalDelivery.id == id,
+                SignalDelivery.status.in_(["pending", "retrying"]),
+            )
             .values(
                 status="retrying",
                 last_attempt_at=now,
@@ -98,10 +109,13 @@ class DeliveryRepository(BaseRepository[SignalDelivery]):
         await self.session.execute(stmt)
 
     async def mark_dlq(self, id: uuid.UUID, error: str) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             update(SignalDelivery)
-            .where(SignalDelivery.id == id)
+            .where(
+                SignalDelivery.id == id,
+                SignalDelivery.status != "dlq",
+            )
             .values(
                 status="dlq",
                 last_attempt_at=now,

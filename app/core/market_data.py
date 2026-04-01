@@ -16,15 +16,14 @@ tried in order on any failure.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
-from typing import Optional
-
 import ssl
+from datetime import UTC, datetime
 
 import aiohttp
 import certifi
 import pandas as pd
 import structlog
+from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 log = structlog.get_logger(__name__)
 
@@ -42,6 +41,27 @@ _BINANCE_TF: dict[str, str] = {
 # SSL context using certifi's CA bundle — fixes macOS / Docker SSL cert errors
 # for both our direct aiohttp calls and ccxt's internal aiohttp session.
 _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
+
+# Transient network errors worth retrying — excludes HTTP 4xx (bad symbol, etc.)
+_TRANSIENT = (
+    aiohttp.ClientConnectionError,
+    aiohttp.ServerTimeoutError,
+    aiohttp.ServerDisconnectedError,
+    asyncio.TimeoutError,
+    TimeoutError,
+)
+
+
+async def _call_with_retry(fn, *args, **kwargs):  # type: ignore[no-untyped-def]
+    """Call ``fn(*args, **kwargs)`` with up to 3 attempts on transient network errors."""
+    async for attempt in AsyncRetrying(
+        retry=retry_if_exception_type(_TRANSIENT),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        reraise=True,
+    ):
+        with attempt:
+            return await fn(*args, **kwargs)
 
 # ---------------------------------------------------------------------------
 # Timeframe mappings per provider
@@ -107,7 +127,7 @@ async def _fetch_binance(
     symbol: str,
     timeframe: str,
     limit: int,
-    since_ms: Optional[int],
+    since_ms: int | None,
 ) -> list[list]:
     """Direct Binance REST klines — no ccxt, no load_markets() overhead."""
     interval = _BINANCE_TF.get(timeframe)
@@ -292,7 +312,7 @@ def _bars_to_df(raw: list[list]) -> pd.DataFrame:
 
 
 def _ms_now() -> int:
-    return int(datetime.now(timezone.utc).timestamp() * 1000)
+    return int(datetime.now(UTC).timestamp() * 1000)
 
 
 def _dt_to_ms(dt: datetime) -> int:
@@ -308,7 +328,7 @@ async def fetch_ohlcv(
     symbol: str,
     timeframe: str,
     limit: int = 500,
-    since: Optional[datetime] = None,
+    since: datetime | None = None,
 ) -> pd.DataFrame:
     """
     Fetch the latest ``limit`` OHLCV bars for ``symbol``.
@@ -332,12 +352,12 @@ async def fetch_ohlcv(
     for provider in providers:
         try:
             if provider == "binance":
-                raw = await _fetch_binance(symbol, timeframe, limit, since_ms)
+                raw = await _call_with_retry(_fetch_binance, symbol, timeframe, limit, since_ms)
             elif provider == "deribit":
-                raw = await _fetch_deribit(symbol, timeframe, approx_start_ms, end_ms)
+                raw = await _call_with_retry(_fetch_deribit, symbol, timeframe, approx_start_ms, end_ms)
                 raw = raw[-limit:]  # trim to requested limit
             elif provider == "bitfinex":
-                raw = await _fetch_bitfinex(symbol, timeframe, approx_start_ms, end_ms, limit)
+                raw = await _call_with_retry(_fetch_bitfinex, symbol, timeframe, approx_start_ms, end_ms, limit)
             else:
                 continue
 
@@ -380,11 +400,11 @@ async def fetch_ohlcv_range(
     for provider in providers:
         try:
             if provider == "binance":
-                raw = await _fetch_binance_range(symbol, timeframe, start_ms, end_ms, batch_size)
+                raw = await _call_with_retry(_fetch_binance_range, symbol, timeframe, start_ms, end_ms, batch_size)
             elif provider == "deribit":
-                raw = await _fetch_deribit(symbol, timeframe, start_ms, end_ms)
+                raw = await _call_with_retry(_fetch_deribit, symbol, timeframe, start_ms, end_ms)
             elif provider == "bitfinex":
-                raw = await _fetch_bitfinex(symbol, timeframe, start_ms, end_ms, limit=10000)
+                raw = await _call_with_retry(_fetch_bitfinex, symbol, timeframe, start_ms, end_ms, limit=10000)
             else:
                 continue
 

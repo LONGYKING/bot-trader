@@ -6,9 +6,7 @@ Responsible for:
 - Marking Signal.is_profitable.
 """
 import uuid
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,7 +76,7 @@ async def resolve_outcomes(session: AsyncSession) -> list[dict]:
 
     Returns list of resolved outcome dicts (for downstream notifications).
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     signal_repo = SignalRepository(session)
     outcome_repo = OutcomeRepository(session)
 
@@ -90,20 +88,15 @@ async def resolve_outcomes(session: AsyncSession) -> list[dict]:
     from app.repositories.strategy import StrategyRepository
     strategy_repo = StrategyRepository(session)
 
-    # Collect unique strategy ids
-    unique_strategy_ids = {s.strategy_id for s in expired_signals}
-    strategies = {}
-    for sid in unique_strategy_ids:
-        strat = await strategy_repo.get_by_id(sid)
-        if strat is not None:
-            strategies[sid] = strat
+    # Batch-load all required strategies in one query
+    unique_strategy_ids = list({s.strategy_id for s in expired_signals})
+    strategies = await strategy_repo.get_by_ids(unique_strategy_ids)
 
     # Group signals by (exchange, asset, timeframe, expiry_time) for price fetching
     # We build a lookup of (exchange, asset, timeframe, expiry_time) -> exit_price
     price_cache: dict[tuple, float] = {}
 
     outcomes_to_insert: list[dict] = []
-    profitable_map: dict[uuid.UUID, bool] = []  # type: ignore[assignment]
     resolved_ids: list[uuid.UUID] = []
     profitable_values: dict[uuid.UUID, bool] = {}
 
@@ -212,8 +205,6 @@ async def list_outcomes(
         limit=limit,
         offset=offset,
     )
-    # Build a parallel count query using the same filters
-    count_repo = OutcomeRepository(session)
     # Re-use list_filtered with a large limit to get total; a dedicated count method
     # would be cleaner but the spec provides get_stats, not count_filtered.  We
     # therefore use the count available on the base repo via a filtered list length.

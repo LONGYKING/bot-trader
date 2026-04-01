@@ -10,8 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-RATE_LIMIT = 60    # requests
-WINDOW_SEC = 60    # seconds
+from app.config import get_settings
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -27,20 +26,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if redis is None:
                 return await call_next(request)
 
+            s = get_settings()
+            rate_limit = s.api_rate_limit_requests
+            window_sec = s.api_rate_limit_window_seconds
+
             now = int(time.time())
-            window_key = f"ratelimit:{api_key}:{now // WINDOW_SEC}"
+            window_key = f"ratelimit:{api_key}:{now // window_sec}"
 
             pipe = redis.pipeline()
             pipe.incr(window_key)
-            pipe.expire(window_key, WINDOW_SEC * 2)
+            pipe.expire(window_key, window_sec * 2)
             results = await pipe.execute()
 
             count = results[0]
-            if count > RATE_LIMIT:
+            if count > rate_limit:
                 return ORJSONResponse(
                     status_code=429,
-                    content={"detail": "Rate limit exceeded. Max 60 requests/minute."},
-                    headers={"Retry-After": str(WINDOW_SEC - (now % WINDOW_SEC))},
+                    content={"detail": f"Rate limit exceeded. Max {rate_limit} requests/minute."},
+                    headers={"Retry-After": str(window_sec - (now % window_sec))},
                 )
         except Exception:
             # If Redis is unavailable, allow the request through

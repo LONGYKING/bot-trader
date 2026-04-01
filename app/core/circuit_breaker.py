@@ -20,15 +20,24 @@ Usage:
 """
 from typing import Any
 
-FAILURE_THRESHOLD = 5
-RECOVERY_TIMEOUT = 300   # seconds
-WINDOW_SEC = 60
+from app.config import get_settings
 
 
 class CircuitBreaker:
-    def __init__(self, redis: Any, channel_id: str) -> None:
+    def __init__(
+        self,
+        redis: Any,
+        channel_id: str,
+        failure_threshold: int | None = None,
+        recovery_timeout: int | None = None,
+        window_seconds: int | None = None,
+    ) -> None:
+        s = get_settings()
         self.redis = redis
         self.channel_id = channel_id
+        self.failure_threshold = failure_threshold or s.circuit_breaker_failure_threshold
+        self.recovery_timeout = recovery_timeout or s.circuit_breaker_recovery_timeout_seconds
+        self.window_sec = window_seconds or s.circuit_breaker_window_seconds
         self._failure_key = f"cb:failures:{channel_id}"
         self._open_key = f"cb:open:{channel_id}"
 
@@ -41,11 +50,11 @@ class CircuitBreaker:
         """Increment failure counter. Open circuit if threshold exceeded."""
         pipe = self.redis.pipeline()
         pipe.incr(self._failure_key)
-        pipe.expire(self._failure_key, WINDOW_SEC)
+        pipe.expire(self._failure_key, self.window_sec)
         results = await pipe.execute()
         count = results[0]
-        if count >= FAILURE_THRESHOLD:
-            await self.redis.setex(self._open_key, RECOVERY_TIMEOUT, "1")
+        if count >= self.failure_threshold:
+            await self.redis.setex(self._open_key, self.recovery_timeout, "1")
 
     async def record_success(self) -> None:
         """Reset failure counter and close circuit."""

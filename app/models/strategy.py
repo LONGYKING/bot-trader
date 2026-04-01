@@ -1,8 +1,7 @@
-import uuid
 
 from sqlalchemy import Boolean, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKey
 
@@ -19,5 +18,7 @@ class Strategy(UUIDPrimaryKey, TimestampMixin, Base):
     params: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     trade_type: Mapped[str] = mapped_column(String(20), nullable=False, default="options")
     execution_params: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
+    risk_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

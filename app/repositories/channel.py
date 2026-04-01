@@ -3,7 +3,7 @@ import hashlib
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -79,11 +79,13 @@ class ChannelRepository(BaseRepository[Channel]):
     # Additional queries
     # ------------------------------------------------------------------
 
-    async def list_active(self) -> list[Channel]:
+    async def list_active(self, limit: int = 100, offset: int = 0) -> list[Channel]:
         stmt = (
             select(Channel)
             .where(Channel.is_active == True)  # noqa: E712
             .order_by(Channel.name)
+            .offset(offset)
+            .limit(limit)
         )
         result = await self.session.execute(stmt)
         channels = list(result.scalars().all())
@@ -106,7 +108,7 @@ class ChannelRepository(BaseRepository[Channel]):
             update(Channel)
             .where(Channel.id == id)
             .values(
-                last_health_at=datetime.now(timezone.utc),
+                last_health_at=datetime.now(UTC),
                 last_health_ok=ok,
             )
         )

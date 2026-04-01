@@ -14,10 +14,9 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import BaseModel, Field, model_validator
 
+from app.core.indicators import add_macd, add_rsi
 from app.strategies.base import BaseStrategy, SignalResult
 from app.strategies.registry import StrategyRegistry
-from app.core.indicators import add_macd, add_rsi
-
 
 # ---------------------------------------------------------------------------
 # Parameter model
@@ -34,7 +33,7 @@ class MacdRsiParams(BaseModel):
     model_config = {"extra": "forbid"}
 
     @model_validator(mode="after")
-    def fast_must_be_less_than_slow(self) -> "MacdRsiParams":
+    def fast_must_be_less_than_slow(self) -> MacdRsiParams:
         if self.macd_fast >= self.macd_slow:
             raise ValueError(
                 f"macd_fast ({self.macd_fast}) must be less than macd_slow ({self.macd_slow})"

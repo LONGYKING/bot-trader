@@ -31,6 +31,7 @@ from app.exceptions import (
     not_found_handler,
     validation_handler,
 )
+from app.integrations.exchange_factory import close_all_clients
 from app.logging import setup_logging
 
 logger = structlog.get_logger(__name__)
@@ -67,6 +68,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    await close_all_clients()
     await engine.dispose()
     await close_redis()
     app.state.redis = None

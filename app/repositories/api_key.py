@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 
@@ -19,6 +19,6 @@ class ApiKeyRepository(BaseRepository[ApiKey]):
         stmt = (
             update(ApiKey)
             .where(ApiKey.id == id)
-            .values(last_used_at=datetime.now(timezone.utc))
+            .values(last_used_at=datetime.now(UTC))
         )
         await self.session.execute(stmt)

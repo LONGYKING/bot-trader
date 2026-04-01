@@ -1,14 +1,10 @@
 import uuid
 from datetime import datetime
-from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
-from app.dependencies import require_scope
-from app.exceptions import NotFoundError
+from app.dependencies import DBSession, require_scope
 from app.models.api_key import ApiKey
 from app.repositories.api_key import ApiKeyRepository
 from app.services import api_key_service
@@ -46,7 +42,7 @@ class WorkerStats(BaseModel):
 
 @router.get("/api-keys", response_model=list[ApiKeyRead])
 async def list_api_keys(
-    session: AsyncSession = Depends(get_db),
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     repo = ApiKeyRepository(session)
@@ -57,7 +53,7 @@ async def list_api_keys(
 @router.post("/api-keys", response_model=ApiKeyCreated, status_code=201)
 async def create_api_key(
     body: ApiKeyCreate,
-    session: AsyncSession = Depends(get_db),
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     api_key, raw_key = await api_key_service.create_api_key(
@@ -69,7 +65,7 @@ async def create_api_key(
 @router.delete("/api-keys/{id}", status_code=204)
 async def revoke_api_key(
     id: uuid.UUID,
-    session: AsyncSession = Depends(get_db),
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     await api_key_service.revoke_api_key(session, id)
@@ -78,7 +74,7 @@ async def revoke_api_key(
 @router.post("/api-keys/{id}/rotate", response_model=ApiKeyCreated)
 async def rotate_api_key(
     id: uuid.UUID,
-    session: AsyncSession = Depends(get_db),
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     api_key, raw_key = await api_key_service.rotate_api_key(session, id)

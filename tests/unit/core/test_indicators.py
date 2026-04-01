@@ -122,8 +122,12 @@ class TestAddMacd:
 
     def test_hist_equals_line_minus_signal(self, ohlcv_df):
         result = add_macd(ohlcv_df)
-        diff = (result["macd_line"] - result["macd_signal_line"]).round(8)
-        hist = result["macd_hist"].round(8)
+        # _safe_series fills warmup NaN with 0.0; the signal line settles last
+        # (slow=26, signal=9 → full warmup = slow + signal - 1 = 34 bars)
+        warmup = 26 + 9 - 1
+        post = result.iloc[warmup:]
+        diff = (post["macd_line"] - post["macd_signal_line"]).round(8)
+        hist = post["macd_hist"].round(8)
         pd.testing.assert_series_equal(diff, hist, check_names=False, atol=1e-4)
 
 
@@ -340,10 +344,7 @@ class TestAddSma:
     def test_sma_matches_rolling_mean(self, ohlcv_df):
         period = 10
         result = add_sma(ohlcv_df, period=period)
-        expected = ohlcv_df["close"].rolling(period).mean()
-        pd.testing.assert_series_equal(
-            result["sma_10"].dropna(),
-            expected.dropna(),
-            check_names=False,
-            rtol=1e-4,
-        )
+        # _safe_series fills warmup NaN with 0.0; compare only the settled region
+        post = result["sma_10"].iloc[period - 1:]
+        expected = ohlcv_df["close"].rolling(period).mean().iloc[period - 1:]
+        pd.testing.assert_series_equal(post, expected, check_names=False, rtol=1e-4)

@@ -9,6 +9,14 @@ from app.repositories.base import BaseRepository
 class StrategyRepository(BaseRepository[Strategy]):
     model = Strategy
 
+    async def get_by_ids(self, ids: list[uuid.UUID]) -> dict[uuid.UUID, Strategy]:
+        """Batch-load strategies by id. Returns a {id: Strategy} map."""
+        if not ids:
+            return {}
+        stmt = select(Strategy).where(Strategy.id.in_(ids))
+        result = await self.session.execute(stmt)
+        return {s.id: s for s in result.scalars().all()}
+
     async def get_by_name(self, name: str) -> Strategy | None:
         stmt = select(Strategy).where(Strategy.name == name)
         result = await self.session.execute(stmt)

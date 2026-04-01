@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from typing import Type
-
 from app.strategies.base import BaseStrategy
 
 
 class StrategyRegistry:
-    _registry: dict[str, Type[BaseStrategy]] = {}
+    _registry: dict[str, type[BaseStrategy]] = {}
 
     @classmethod
-    def register(cls, strategy_cls: Type[BaseStrategy]) -> Type[BaseStrategy]:
+    def register(cls, strategy_cls: type[BaseStrategy]) -> type[BaseStrategy]:
         """
         Class decorator that registers a strategy by its ``name`` attribute.
 
@@ -34,7 +32,7 @@ class StrategyRegistry:
         return strategy_cls
 
     @classmethod
-    def get(cls, name: str) -> Type[BaseStrategy]:
+    def get(cls, name: str) -> type[BaseStrategy]:
         """Return the strategy class registered under *name*."""
         if name not in cls._registry:
             raise ValueError(

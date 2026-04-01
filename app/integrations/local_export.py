@@ -12,7 +12,7 @@ Sheets:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 log = structlog.get_logger(__name__)
 
 
-def _write_excel(result: "BacktestResult", strategy_name: str, asset: str, timeframe: str, path: Path) -> None:
+def _write_excel(result: BacktestResult, strategy_name: str, asset: str, timeframe: str, path: Path) -> None:
     """Synchronous Excel writer — run via run_in_executor."""
     import openpyxl
     from openpyxl.styles import Font
@@ -49,7 +49,7 @@ def _write_excel(result: "BacktestResult", strategy_name: str, asset: str, timef
         ("Sharpe Ratio", f"{result.sharpe_ratio:.2f}"),
         ("Max Drawdown %", f"{result.max_drawdown_pct:.2f}%"),
         ("Annual Return %", f"{result.annual_return_pct:.2f}%"),
-        ("Generated At", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")),
+        ("Generated At", datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")),
     ]
     for i, row in enumerate(rows, start=1):
         ws_summary.cell(row=i, column=1, value=row[0])
@@ -96,7 +96,7 @@ def _write_excel(result: "BacktestResult", strategy_name: str, asset: str, timef
 
 
 async def export_backtest_to_local(
-    result: "BacktestResult",
+    result: BacktestResult,
     strategy_name: str,
     asset: str,
     timeframe: str,

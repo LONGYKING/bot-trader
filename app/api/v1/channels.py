@@ -1,11 +1,8 @@
 import uuid
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
-from app.dependencies import PaginationParams, require_scope
+from app.dependencies import DBSession, PaginationParams, require_scope
 from app.models.api_key import ApiKey
 from app.schemas.channel import ChannelCreate, ChannelResponse, ChannelTestResponse, ChannelUpdate
 from app.schemas.delivery import DeliveryResponse
@@ -16,17 +13,20 @@ router = APIRouter(prefix="/channels")
 
 @router.get("", response_model=list[ChannelResponse])
 async def list_channels(
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
+    pagination: PaginationParams = Depends(),
 ):
-    """List all active channels."""
-    return await channel_service.list_channels(session)
+    """List active channels. Paginated — default page size 100."""
+    return await channel_service.list_channels(
+        session, limit=pagination.limit, offset=pagination.skip
+    )
 
 
 @router.post("", response_model=ChannelResponse, status_code=status.HTTP_201_CREATED)
 async def create_channel(
     body: ChannelCreate,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Create a new notification channel."""
@@ -36,7 +36,7 @@ async def create_channel(
 @router.get("/{id}", response_model=ChannelResponse)
 async def get_channel(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Get a channel by id. Config (credentials) is masked in the response."""
@@ -47,7 +47,7 @@ async def get_channel(
 async def update_channel(
     id: uuid.UUID,
     body: ChannelUpdate,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Update a channel's configuration."""
@@ -58,7 +58,7 @@ async def update_channel(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_channel(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Delete a channel. Cascade removes associated subscriptions and deliveries."""
@@ -68,7 +68,7 @@ async def delete_channel(
 @router.post("/{id}/test", response_model=ChannelTestResponse)
 async def test_channel(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Send a test message through the channel."""
@@ -82,7 +82,7 @@ async def test_channel(
 @router.get("/{id}/health")
 async def channel_health(
     id: uuid.UUID,
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
 ):
     """Run a live health check on the channel and persist the result."""
@@ -92,9 +92,9 @@ async def channel_health(
 @router.get("/{id}/deliveries", response_model=list[DeliveryResponse])
 async def channel_deliveries(
     id: uuid.UUID,
-    pagination: PaginationParams = Depends(),
-    session: Annotated[AsyncSession, Depends(get_db)] = None,
+    session: DBSession,
     _: ApiKey = Depends(require_scope("admin")),
+    pagination: PaginationParams = Depends(),
 ):
     """Return delivery history for a channel."""
     # Ensure channel exists

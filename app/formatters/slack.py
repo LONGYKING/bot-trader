@@ -1,6 +1,7 @@
 from typing import Any
 
 from app.formatters.base import AbstractFormatter
+from app.types.signal import SignalData
 
 _SIGNAL_MAP: dict[int, tuple[str, str]] = {
     7: ("🚀", "STRONG BUY"),
@@ -27,16 +28,16 @@ def _format_indicators(snapshot: dict) -> str:
 
 
 class SlackFormatter(AbstractFormatter):
-    def format_signal(self, signal_data: dict) -> dict[str, Any]:
-        signal_value: int = signal_data.get("signal_value", 0)
-        asset: str = signal_data.get("asset", "UNKNOWN")
-        direction: str | None = signal_data.get("direction")
-        tenor_days: int | None = signal_data.get("tenor_days")
-        confidence: float | None = signal_data.get("confidence")
-        regime: str | None = signal_data.get("regime")
-        entry_price: float | None = signal_data.get("entry_price")
-        rule_triggered: str | None = signal_data.get("rule_triggered")
-        indicator_snapshot: dict | None = signal_data.get("indicator_snapshot")
+    def format_signal(self, signal_data: SignalData) -> dict[str, Any]:
+        signal_value = signal_data.signal_value
+        asset = signal_data.asset
+        direction = signal_data.direction
+        tenor_days = signal_data.tenor_days
+        confidence = signal_data.confidence
+        regime = signal_data.regime
+        entry_price = signal_data.entry_price
+        rule_triggered = signal_data.rule_triggered
+        indicator_snapshot = signal_data.indicator_snapshot or None
 
         emoji, label = _SIGNAL_MAP.get(signal_value, ("⏸", "NEUTRAL"))
 
