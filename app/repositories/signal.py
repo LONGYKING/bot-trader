@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import and_, case, select, update
+from sqlalchemy import and_, case, func, select, update
 
 from app.models.signal import Signal
 from app.repositories.base import BaseRepository
@@ -28,7 +28,7 @@ class SignalRepository(BaseRepository[Signal]):
     ) -> list[Signal]:
         stmt = (
             select(Signal)
-            .where(Signal.strategy_id == strategy_id)
+            .where(*self._tenant_clause(), Signal.strategy_id == strategy_id)
             .order_by(Signal.entry_time.desc())
             .offset(offset)
             .limit(limit)
@@ -45,7 +45,7 @@ class SignalRepository(BaseRepository[Signal]):
         to_dt: datetime | None = None,
         is_profitable: bool | None = None,
     ) -> list:
-        conds = []
+        conds = list(self._tenant_clause())
         if strategy_id is not None:
             conds.append(Signal.strategy_id == strategy_id)
         if asset is not None:
@@ -110,6 +110,36 @@ class SignalRepository(BaseRepository[Signal]):
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_today(self, tenant_id: uuid.UUID) -> int:
+        now = datetime.now(UTC)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        stmt = (
+            select(func.count())
+            .select_from(Signal)
+            .where(
+                Signal.tenant_id == tenant_id,
+                Signal.entry_time >= day_start,
+                Signal.signal_value != 0,
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one()
+
+    async def count_this_month(self, tenant_id: uuid.UUID) -> int:
+        now = datetime.now(UTC)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        stmt = (
+            select(func.count())
+            .select_from(Signal)
+            .where(
+                Signal.tenant_id == tenant_id,
+                Signal.entry_time >= month_start,
+                Signal.signal_value != 0,
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one()
 
     async def bulk_mark_profitable(
         self,

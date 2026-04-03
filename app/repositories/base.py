@@ -12,11 +12,25 @@ ModelT = TypeVar("ModelT", bound=Base)
 class BaseRepository(Generic[ModelT]):
     model: type[ModelT]
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, tenant_id: uuid.UUID | None = None) -> None:
         self.session = session
+        self.tenant_id = tenant_id  # None = global access (workers, admin)
+
+    def _tenant_clause(self) -> list:
+        """Return a WHERE clause filtering by tenant_id, or [] for global access."""
+        if self.tenant_id is None:
+            return []
+        if not hasattr(self.model, "tenant_id"):
+            return []
+        return [self.model.tenant_id == self.tenant_id]  # type: ignore[attr-defined]
 
     async def get_by_id(self, id: uuid.UUID) -> ModelT | None:
-        return await self.session.get(self.model, id)
+        stmt = select(self.model).where(
+            self.model.id == id,  # type: ignore[attr-defined]
+            *self._tenant_clause(),
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def list(
         self,
@@ -24,7 +38,7 @@ class BaseRepository(Generic[ModelT]):
         limit: int = 50,
         **filters: Any,
     ) -> list[ModelT]:
-        stmt = select(self.model)
+        stmt = select(self.model).where(*self._tenant_clause())
         for key, value in filters.items():
             if hasattr(self.model, key) and value is not None:
                 stmt = stmt.where(getattr(self.model, key) == value)
@@ -33,7 +47,7 @@ class BaseRepository(Generic[ModelT]):
         return list(result.scalars().all())
 
     async def count(self, **filters: Any) -> int:
-        stmt = select(func.count()).select_from(self.model)
+        stmt = select(func.count()).select_from(self.model).where(*self._tenant_clause())
         for key, value in filters.items():
             if hasattr(self.model, key) and value is not None:
                 stmt = stmt.where(getattr(self.model, key) == value)
@@ -41,6 +55,8 @@ class BaseRepository(Generic[ModelT]):
         return result.scalar_one()
 
     async def create(self, data: dict[str, Any]) -> ModelT:
+        if self.tenant_id is not None and hasattr(self.model, "tenant_id"):
+            data.setdefault("tenant_id", self.tenant_id)
         instance = self.model(**data)
         self.session.add(instance)
         await self.session.flush()

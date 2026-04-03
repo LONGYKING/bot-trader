@@ -11,8 +11,20 @@ import type {
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
-// Read API key at call-time from the zustand store persisted in localStorage
-function getKey(): string {
+// Read JWT access token from the zustand auth store
+function getToken(): string {
+  if (typeof window === "undefined") return ""
+  try {
+    const raw = localStorage.getItem("bt_auth")
+    if (!raw) return ""
+    return JSON.parse(raw)?.state?.accessToken ?? ""
+  } catch {
+    return ""
+  }
+}
+
+// Legacy API key fallback (for integrations using X-API-Key)
+function getLegacyKey(): string {
   if (typeof window === "undefined") return ""
   try {
     const raw = localStorage.getItem("bt_api_key")
@@ -27,21 +39,87 @@ async function req<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const key = getKey()
+  const token = getToken()
+  const legacyKey = getLegacyKey()
+
+  const authHeader: Record<string, string> = {}
+  if (token) {
+    authHeader["Authorization"] = `Bearer ${token}`
+  } else if (legacyKey) {
+    authHeader["X-API-Key"] = legacyKey
+  }
+
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...(key ? { "X-API-Key": key } : {}),
+      ...authHeader,
       ...options.headers,
     },
   })
+
+  // Auto-refresh on 401
+  if (res.status === 401 && token) {
+    const refreshed = await tryRefresh()
+    if (refreshed) {
+      // Retry the original request with the new token
+      const newToken = getToken()
+      const retryRes = await fetch(`${BASE}${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${newToken}`,
+          ...options.headers,
+        },
+      })
+      if (!retryRes.ok) {
+        const body = await retryRes.text()
+        throw new Error(body || `HTTP ${retryRes.status}`)
+      }
+      if (retryRes.status === 204) return undefined as T
+      return retryRes.json()
+    } else {
+      // Refresh failed — force logout
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("bt_auth")
+        window.location.href = "/login"
+      }
+      throw new Error("Session expired. Please log in again.")
+    }
+  }
+
   if (!res.ok) {
     const body = await res.text()
     throw new Error(body || `HTTP ${res.status}`)
   }
   if (res.status === 204) return undefined as T
   return res.json()
+}
+
+async function tryRefresh(): Promise<boolean> {
+  try {
+    const raw = localStorage.getItem("bt_auth")
+    if (!raw) return false
+    const refreshToken = JSON.parse(raw)?.state?.refreshToken
+    if (!refreshToken) return false
+
+    const res = await fetch(`${BASE}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+    if (!res.ok) return false
+    const data = await res.json()
+
+    // Update the stored tokens
+    const stored = JSON.parse(raw)
+    stored.state.accessToken = data.access_token
+    stored.state.refreshToken = data.refresh_token
+    localStorage.setItem("bt_auth", JSON.stringify(stored))
+    return true
+  } catch {
+    return false
+  }
 }
 
 function qs(params: Record<string, unknown>): string {
@@ -51,6 +129,50 @@ function qs(params: Record<string, unknown>): string {
   }
   const s = p.toString()
   return s ? `?${s}` : ""
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export const auth = {
+  register: (data: { email: string; password: string; full_name?: string }) =>
+    fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }).then(async (r) => {
+      if (!r.ok) throw new Error(await r.text())
+      return r.json() as Promise<{ access_token: string; refresh_token: string }>
+    }),
+
+  login: (data: { email: string; password: string }) =>
+    fetch(`${BASE}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }).then(async (r) => {
+      if (!r.ok) throw new Error(await r.text())
+      return r.json() as Promise<{ access_token: string; refresh_token: string }>
+    }),
+
+  me: () =>
+    req<{
+      user: { id: string; email: string; full_name: string | null; is_owner: boolean }
+      tenant: { id: string; name: string; plan_key: string; plan_status: string }
+      limits: Record<string, unknown>
+    }>("/api/v1/auth/me"),
+}
+
+// ─── Billing ─────────────────────────────────────────────────────────────────
+
+export const billing = {
+  status: () =>
+    req<{ plan_key: string; plan_status: string; payment_provider: string | null }>("/api/v1/billing/status"),
+
+  checkout: (data: { plan_key: string; success_url: string; cancel_url: string }) =>
+    req<{ checkout_url: string }>("/api/v1/billing/checkout", { method: "POST", body: JSON.stringify(data) }),
+
+  portal: (data: { return_url: string }) =>
+    req<{ portal_url: string }>("/api/v1/billing/portal", { method: "POST", body: JSON.stringify(data) }),
 }
 
 // ─── Strategies ──────────────────────────────────────────────────────────────
@@ -190,4 +312,10 @@ export const admin = {
 
   workerStats: () =>
     req<WorkerStats>("/api/v1/admin/workers/stats"),
+
+  listPlans: (publicOnly = false) =>
+    req<Record<string, unknown>[]>(`/api/v1/admin/plans${publicOnly ? "?public=true" : ""}`),
+
+  updatePlan: (key: string, data: Record<string, unknown>) =>
+    req<Record<string, unknown>>(`/api/v1/admin/plans/${key}`, { method: "PATCH", body: JSON.stringify(data) }),
 }

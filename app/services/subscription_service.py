@@ -13,35 +13,35 @@ from app.repositories.subscription import SubscriptionRepository
 async def create_subscription(
     session: AsyncSession,
     data: dict[str, Any],
+    tenant_id: uuid.UUID | None = None,
 ) -> Subscription:
-    """Create a subscription. Validates that referenced channel and strategy exist."""
     channel_id = data.get("channel_id")
     strategy_id = data.get("strategy_id")
 
     if channel_id is None:
         raise NotFoundError("Channel", "None")
 
-    channel_repo = ChannelRepository(session)
+    channel_repo = ChannelRepository(session, tenant_id)
     channel = await channel_repo.get_by_id(channel_id)
     if channel is None:
         raise NotFoundError("Channel", str(channel_id))
 
     if strategy_id is not None:
-        strategy_repo = StrategyRepository(session)
+        strategy_repo = StrategyRepository(session, tenant_id)
         strategy = await strategy_repo.get_by_id(strategy_id)
         if strategy is None:
             raise NotFoundError("Strategy", str(strategy_id))
 
-    repo = SubscriptionRepository(session)
+    repo = SubscriptionRepository(session, tenant_id)
     return await repo.create(data)
 
 
 async def get_subscription(
     session: AsyncSession,
     id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
 ) -> Subscription:
-    """Return a subscription by id. Raises NotFoundError if not found."""
-    repo = SubscriptionRepository(session)
+    repo = SubscriptionRepository(session, tenant_id)
     subscription = await repo.get_by_id(id)
     if subscription is None:
         raise NotFoundError("Subscription", str(id))
@@ -50,14 +50,14 @@ async def get_subscription(
 
 async def list_subscriptions(
     session: AsyncSession,
+    tenant_id: uuid.UUID | None = None,
     channel_id: uuid.UUID | None = None,
     strategy_id: uuid.UUID | None = None,
     is_active: bool | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[Subscription], int]:
-    """Return (items, total_count) with optional filters."""
-    repo = SubscriptionRepository(session)
+    repo = SubscriptionRepository(session, tenant_id)
 
     filters: dict[str, Any] = {}
     if channel_id is not None:
@@ -76,21 +76,21 @@ async def update_subscription(
     session: AsyncSession,
     id: uuid.UUID,
     data: dict[str, Any],
+    tenant_id: uuid.UUID | None = None,
 ) -> Subscription:
-    """Update a subscription. Validates referenced channel/strategy if changed."""
-    repo = SubscriptionRepository(session)
+    repo = SubscriptionRepository(session, tenant_id)
     subscription = await repo.get_by_id(id)
     if subscription is None:
         raise NotFoundError("Subscription", str(id))
 
     if "channel_id" in data:
-        channel_repo = ChannelRepository(session)
+        channel_repo = ChannelRepository(session, tenant_id)
         channel = await channel_repo.get_by_id(data["channel_id"])
         if channel is None:
             raise NotFoundError("Channel", str(data["channel_id"]))
 
     if "strategy_id" in data and data["strategy_id"] is not None:
-        strategy_repo = StrategyRepository(session)
+        strategy_repo = StrategyRepository(session, tenant_id)
         strategy = await strategy_repo.get_by_id(data["strategy_id"])
         if strategy is None:
             raise NotFoundError("Strategy", str(data["strategy_id"]))
@@ -101,9 +101,12 @@ async def update_subscription(
     return updated
 
 
-async def delete_subscription(session: AsyncSession, id: uuid.UUID) -> None:
-    """Hard-delete a subscription."""
-    repo = SubscriptionRepository(session)
+async def delete_subscription(
+    session: AsyncSession,
+    id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> None:
+    repo = SubscriptionRepository(session, tenant_id)
     subscription = await repo.get_by_id(id)
     if subscription is None:
         raise NotFoundError("Subscription", str(id))

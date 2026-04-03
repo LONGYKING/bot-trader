@@ -1,4 +1,4 @@
-.PHONY: dev worker migrate migration test lint format seed-api-key \
+.PHONY: dev worker migrate migration test lint format seed-api-key seed-owner \
         docker-up docker-down docker-build docker-logs docker-api docker-worker \
         install setup frontend frontend-install dev-all
 
@@ -39,6 +39,9 @@ format:
 
 seed-api-key:
 	uv run python scripts/create_api_key.py
+
+seed-owner:
+	uv run python scripts/seed_owner.py
 
 frontend-install:
 	cd frontend && npm install

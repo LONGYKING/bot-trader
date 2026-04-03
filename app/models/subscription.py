@@ -11,6 +11,12 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKey
 class Subscription(UUIDPrimaryKey, TimestampMixin, Base):
     __tablename__ = "subscriptions"
 
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     channel_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("channels.id", ondelete="CASCADE"),

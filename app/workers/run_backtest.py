@@ -133,6 +133,7 @@ async def run_backtest(ctx: dict, backtest_id: str) -> dict:
                     trade_dicts = [
                         {
                             "backtest_id": backtest_uuid,
+                            "tenant_id": backtest.tenant_id,
                             "entry_time": t.entry_time.to_pydatetime() if hasattr(t.entry_time, "to_pydatetime") else t.entry_time,
                             "exit_time": t.exit_time.to_pydatetime() if hasattr(t.exit_time, "to_pydatetime") else t.exit_time,
                             "direction": t.direction,

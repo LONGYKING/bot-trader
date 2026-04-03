@@ -14,6 +14,12 @@ class SignalOutcome(UUIDPrimaryKey, Base):
         UniqueConstraint("signal_id", name="uq_outcome_signal"),
     )
 
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     signal_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("signals.id", ondelete="CASCADE"),

@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { Providers } from "@/providers/providers"
-import { ApiKeyGate } from "@/components/layout/api-key-gate"
+import { AuthGate } from "@/components/layout/auth-gate"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 
@@ -30,7 +30,7 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
         <Providers>
-          <ApiKeyGate>
+          <AuthGate>
             <Sidebar />
             <Header />
             <main className="ml-56 pt-14 min-h-screen">
@@ -38,7 +38,7 @@ export default function RootLayout({
                 {children}
               </div>
             </main>
-          </ApiKeyGate>
+          </AuthGate>
         </Providers>
       </body>
     </html>

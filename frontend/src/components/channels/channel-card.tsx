@@ -42,7 +42,10 @@ export function ChannelCard({ channel: c, onViewDeliveries }: ChannelCardProps) 
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-100">{c.name}</p>
-            <p className="text-xs text-slate-500">{channelTypeLabel(c.channel_type)}</p>
+            <p className="text-xs text-slate-500">
+              {channelTypeLabel(c.channel_type)}
+              {c.config_summary && <span className="ml-1.5 text-slate-600">· {c.config_summary}</span>}
+            </p>
           </div>
         </div>
         <StatusDot status={c.health_status ?? (c.is_active ? "active" : "inactive")} />

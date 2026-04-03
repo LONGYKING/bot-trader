@@ -82,7 +82,7 @@ class ChannelRepository(BaseRepository[Channel]):
     async def list_active(self, limit: int = 100, offset: int = 0) -> list[Channel]:
         stmt = (
             select(Channel)
-            .where(Channel.is_active == True)  # noqa: E712
+            .where(*self._tenant_clause(), Channel.is_active == True)  # noqa: E712
             .order_by(Channel.name)
             .offset(offset)
             .limit(limit)
@@ -95,7 +95,7 @@ class ChannelRepository(BaseRepository[Channel]):
         return channels
 
     async def get_by_name(self, name: str) -> Channel | None:
-        stmt = select(Channel).where(Channel.name == name)
+        stmt = select(Channel).where(*self._tenant_clause(), Channel.name == name)
         result = await self.session.execute(stmt)
         channel = result.scalar_one_or_none()
         if channel is not None and isinstance(channel.config, dict):

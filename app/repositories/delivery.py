@@ -28,7 +28,7 @@ class DeliveryRepository(BaseRepository[SignalDelivery]):
     ) -> list[SignalDelivery]:
         stmt = (
             select(SignalDelivery)
-            .where(SignalDelivery.channel_id == channel_id)
+            .where(*self._tenant_clause(), SignalDelivery.channel_id == channel_id)
             .order_by(SignalDelivery.created_at.desc())
             .offset(offset)
             .limit(limit)

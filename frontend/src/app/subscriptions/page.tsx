@@ -85,6 +85,19 @@ export default function SubscriptionsPage() {
         : <span className="text-slate-500">All</span>,
     },
     {
+      key: "filters",
+      header: "Filters",
+      render: (s: Subscription) => {
+        const parts: string[] = []
+        if (s.asset_filter?.length) parts.push(s.asset_filter.join(", "))
+        if (s.signal_filter?.length) parts.push(`signals: ${s.signal_filter.join(", ")}`)
+        if (s.min_confidence > 0) parts.push(`conf ≥ ${Math.round(s.min_confidence * 100)}%`)
+        return parts.length
+          ? <span className="text-xs text-slate-400">{parts.join(" · ")}</span>
+          : <span className="text-xs text-slate-600">None</span>
+      },
+    },
+    {
       key: "status",
       header: "Status",
       render: (s: Subscription) => (

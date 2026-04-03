@@ -178,9 +178,13 @@ async def resolve_outcomes(session: AsyncSession) -> list[dict]:
     return resolved_outcomes
 
 
-async def get_outcome(session: AsyncSession, signal_id: uuid.UUID) -> SignalOutcome:
+async def get_outcome(
+    session: AsyncSession,
+    signal_id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> SignalOutcome:
     """Return the outcome for a signal. Raises NotFoundError if not found."""
-    repo = OutcomeRepository(session)
+    repo = OutcomeRepository(session, tenant_id)
     outcome = await repo.get_by_signal(signal_id)
     if outcome is None:
         raise NotFoundError("SignalOutcome", str(signal_id))
@@ -192,12 +196,10 @@ async def list_outcomes(
     filters: dict,
     limit: int = 50,
     offset: int = 0,
+    tenant_id: uuid.UUID | None = None,
 ) -> tuple[list[SignalOutcome], int]:
-    """Return (items, total_count) with optional filters.
-
-    Supported filter keys: is_profitable, asset, strategy_id, from_dt, to_dt.
-    """
-    repo = OutcomeRepository(session)
+    """Return (items, total_count) with optional filters."""
+    repo = OutcomeRepository(session, tenant_id)
     items = await repo.list_filtered(
         is_profitable=filters.get("is_profitable"),
         asset=filters.get("asset"),
@@ -207,16 +209,10 @@ async def list_outcomes(
         limit=limit,
         offset=offset,
     )
-    # Re-use list_filtered with a large limit to get total; a dedicated count method
-    # would be cleaner but the spec provides get_stats, not count_filtered.  We
-    # therefore use the count available on the base repo via a filtered list length.
-    # For accuracy we call get_stats which already does aggregation.
     stats = await repo.get_stats(
         asset=filters.get("asset"),
         strategy_id=filters.get("strategy_id"),
     )
-    # total from stats is accurate only without is_profitable / date filters;
-    # for filtered pagination we do a second pass with the same filters but max limit.
     if filters.get("is_profitable") is not None or filters.get("from_dt") is not None or filters.get("to_dt") is not None:
         all_items = await repo.list_filtered(
             is_profitable=filters.get("is_profitable"),
@@ -238,7 +234,8 @@ async def get_stats(
     session: AsyncSession,
     asset: str | None = None,
     strategy_id: uuid.UUID | None = None,
+    tenant_id: uuid.UUID | None = None,
 ) -> dict:
     """Return aggregated outcome stats: win_rate, avg_pnl_pct, total_count, winning_count."""
-    repo = OutcomeRepository(session)
+    repo = OutcomeRepository(session, tenant_id)
     return await repo.get_stats(asset=asset, strategy_id=strategy_id)

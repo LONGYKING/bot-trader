@@ -11,25 +11,20 @@ from app.repositories.strategy import StrategyRepository
 from app.strategies.registry import StrategyRegistry
 
 
-async def create_strategy(session: AsyncSession, data: dict[str, Any]) -> Strategy:
-    """Create a new strategy after validating class and params.
-
-    Raises:
-        ValidationError: strategy_class not registered or params invalid.
-        ConflictError: name already taken.
-    """
+async def create_strategy(
+    session: AsyncSession,
+    data: dict[str, Any],
+    tenant_id: uuid.UUID | None = None,
+) -> Strategy:
     strategy_class = data.get("strategy_class", "")
     params = data.get("params", {})
 
-    # Validate strategy_class is registered and params are valid
     try:
         StrategyRegistry.instantiate(strategy_class, params)
     except (ValueError, Exception) as exc:
         raise ValidationError(str(exc)) from exc
 
-    repo = StrategyRepository(session)
-
-    # Check name uniqueness
+    repo = StrategyRepository(session, tenant_id)
     name = data.get("name", "")
     existing = await repo.get_by_name(name)
     if existing is not None:
@@ -38,9 +33,12 @@ async def create_strategy(session: AsyncSession, data: dict[str, Any]) -> Strate
     return await repo.create(data)
 
 
-async def get_strategy(session: AsyncSession, id: uuid.UUID) -> Strategy:
-    """Return strategy by id. Raises NotFoundError if not found."""
-    repo = StrategyRepository(session)
+async def get_strategy(
+    session: AsyncSession,
+    id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> Strategy:
+    repo = StrategyRepository(session, tenant_id)
     strategy = await repo.get_by_id(id)
     if strategy is None:
         raise NotFoundError("Strategy", str(id))
@@ -49,6 +47,7 @@ async def get_strategy(session: AsyncSession, id: uuid.UUID) -> Strategy:
 
 async def list_strategies(
     session: AsyncSession,
+    tenant_id: uuid.UUID | None = None,
     asset: str | None = None,
     timeframe: str | None = None,
     is_active: bool | None = None,
@@ -56,8 +55,7 @@ async def list_strategies(
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[Strategy], int]:
-    """Return (items, total_count) with optional filters."""
-    repo = StrategyRepository(session)
+    repo = StrategyRepository(session, tenant_id)
 
     filters: dict[str, Any] = {}
     if asset is not None:
@@ -78,13 +76,9 @@ async def update_strategy(
     session: AsyncSession,
     id: uuid.UUID,
     data: dict[str, Any],
+    tenant_id: uuid.UUID | None = None,
 ) -> Strategy:
-    """Update a strategy. Re-validates params if strategy_class or params changed.
-
-    Increments version if params changed.
-    Raises NotFoundError if not found, ValidationError on bad params, ConflictError on name collision.
-    """
-    repo = StrategyRepository(session)
+    repo = StrategyRepository(session, tenant_id)
     strategy = await repo.get_by_id(id)
     if strategy is None:
         raise NotFoundError("Strategy", str(id))
@@ -117,36 +111,32 @@ async def update_strategy(
     return updated
 
 
-async def delete_strategy(session: AsyncSession, id: uuid.UUID) -> None:
-    """Soft-delete a strategy by setting is_active = False."""
-    repo = StrategyRepository(session)
+async def delete_strategy(
+    session: AsyncSession,
+    id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> None:
+    repo = StrategyRepository(session, tenant_id)
     strategy = await repo.get_by_id(id)
     if strategy is None:
         raise NotFoundError("Strategy", str(id))
     await repo.update(id, {"is_active": False})
 
 
-async def get_strategy_performance(session: AsyncSession, id: uuid.UUID) -> dict:
-    """Aggregate performance metrics for a strategy.
+async def get_strategy_performance(
+    session: AsyncSession,
+    id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> dict:
+    await get_strategy(session, id, tenant_id=tenant_id)
 
-    Returns a dict with keys:
-        total_signals, profitable_signals, win_rate, avg_pnl_pct, by_regime
-    """
-    # Ensure strategy exists
-    await get_strategy(session, id)
-
-    signal_repo = SignalRepository(session)
-    outcome_repo = OutcomeRepository(session)
+    signal_repo = SignalRepository(session, tenant_id)
+    outcome_repo = OutcomeRepository(session, tenant_id)
 
     total_signals = await signal_repo.count_filtered(strategy_id=id)
-    profitable_signals = await signal_repo.count_filtered(
-        strategy_id=id, is_profitable=True
-    )
-
+    profitable_signals = await signal_repo.count_filtered(strategy_id=id, is_profitable=True)
     stats = await outcome_repo.get_stats(strategy_id=id)
 
-    # Compute by-regime breakdown from signal outcomes joined with signals
-    # We query signal_outcomes joined with signals filtered by strategy_id
     from sqlalchemy import func, select
 
     from app.models.outcome import SignalOutcome

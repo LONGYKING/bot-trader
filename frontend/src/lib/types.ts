@@ -98,6 +98,7 @@ export interface Channel {
   is_active: boolean
   last_health_check?: string | null
   health_status?: string | null
+  config_summary?: string | null
   created_at: string
 }
 

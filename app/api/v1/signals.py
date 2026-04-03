@@ -6,8 +6,7 @@ from arq import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.db.redis import get_arq_pool
-from app.dependencies import DBSession, PaginationParams, require_scope
-from app.models.api_key import ApiKey
+from app.dependencies import CurrentTenant, DBSession, PaginationParams
 from app.schemas.common import PaginatedResponse
 from app.schemas.delivery import DeliveryResponse
 from app.schemas.outcome import OutcomeResponse
@@ -16,6 +15,9 @@ from app.schemas.signal import (
     SignalGenerateRequest,
     SignalResponse,
 )
+from app.core.plan_limits import get_effective_limits
+from app.models.tenant import Tenant
+from app.repositories.signal import SignalRepository
 from app.services import delivery_service, outcome_service, signal_service
 
 router = APIRouter(prefix="/signals")
@@ -23,8 +25,8 @@ router = APIRouter(prefix="/signals")
 
 @router.get("", response_model=PaginatedResponse[SignalResponse])
 async def list_signals(
+    tenant: CurrentTenant,
     session: DBSession,
-    _: ApiKey = Depends(require_scope("read:signals")),
     strategy_id: uuid.UUID | None = None,
     asset: str | None = None,
     signal_value: int | None = None,
@@ -33,7 +35,6 @@ async def list_signals(
     is_profitable: bool | None = None,
     pagination: PaginationParams = Depends(),
 ):
-    """List signals with optional filters. Paginated."""
     filters: dict = {}
     if strategy_id is not None:
         filters["strategy_id"] = strategy_id
@@ -53,35 +54,49 @@ async def list_signals(
         filters["from_dt"] = parsed_from
     if parsed_to is not None:
         filters["to_dt"] = parsed_to
-
     if is_profitable is not None:
         filters["is_profitable"] = is_profitable
 
     items, total = await signal_service.list_signals(
         session,
+        tenant_id=tenant.id,
         filters=filters,
         limit=pagination.limit,
         offset=pagination.skip,
     )
     pages = max(1, (total + pagination.page_size - 1) // pagination.page_size)
-    return PaginatedResponse(
-        items=items,
-        total=total,
-        page=pagination.page,
-        page_size=pagination.page_size,
-        pages=pages,
-    )
+    return PaginatedResponse(items=items, total=total, page=pagination.page,
+                             page_size=pagination.page_size, pages=pages)
+
+
+async def _check_signal_limits(session: DBSession, tenant: Tenant) -> None:
+    limits = await get_effective_limits(session, tenant)
+    sig_repo = SignalRepository(session, tenant.id)
+    if limits.max_signals_per_day != -1:
+        today_count = await sig_repo.count_today(tenant.id)
+        if today_count >= limits.max_signals_per_day:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Daily signal limit reached ({limits.max_signals_per_day}/day). Upgrade your plan for more signals.",
+            )
+    if limits.max_signals_per_month != -1:
+        month_count = await sig_repo.count_this_month(tenant.id)
+        if month_count >= limits.max_signals_per_month:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Monthly signal limit reached ({limits.max_signals_per_month}/month). Upgrade your plan for more signals.",
+            )
 
 
 @router.post("/generate")
 async def generate_signal(
     body: SignalGenerateRequest,
+    tenant: CurrentTenant,
     session: DBSession,
     redis: Annotated[ArqRedis, Depends(get_arq_pool)],
-    _: ApiKey = Depends(require_scope("write:signals")),
 ):
-    """Trigger immediate signal generation for a strategy."""
-    signal = await signal_service.generate_signal(session, redis, body.strategy_id)
+    await _check_signal_limits(session, tenant)
+    signal = await signal_service.generate_signal(session, redis, body.strategy_id, tenant_id=tenant.id)
     if signal is None:
         return {"message": "No signal generated (neutral)", "signal": None}
     return {"message": "Signal generated", "signal": SignalResponse.model_validate(signal)}
@@ -90,17 +105,13 @@ async def generate_signal(
 @router.post("/force")
 async def force_signal(
     body: SignalForceRequest,
+    tenant: CurrentTenant,
     session: DBSession,
     redis: Annotated[ArqRedis, Depends(get_arq_pool)],
-    _: ApiKey = Depends(require_scope("admin")),
 ):
-    """Force a signal with a specific value, bypassing strategy computation.
-
-    Useful for testing delivery pipelines and exchange order execution.
-    signal_value must be one of: -7, -3, 3, 7.
-    """
+    await _check_signal_limits(session, tenant)
     signal = await signal_service.force_signal(
-        session, redis, body.strategy_id, body.signal_value, body.entry_price
+        session, redis, body.strategy_id, body.signal_value, body.entry_price, tenant_id=tenant.id
     )
     return {"message": "Signal forced", "signal": SignalResponse.model_validate(signal)}
 
@@ -108,30 +119,26 @@ async def force_signal(
 @router.get("/{id}", response_model=SignalResponse)
 async def get_signal(
     id: uuid.UUID,
+    tenant: CurrentTenant,
     session: DBSession,
-    _: ApiKey = Depends(require_scope("read:signals")),
 ):
-    """Get full signal detail by id."""
-    return await signal_service.get_signal(session, id)
+    return await signal_service.get_signal(session, id, tenant_id=tenant.id)
 
 
 @router.get("/{id}/deliveries", response_model=list[DeliveryResponse])
 async def get_signal_deliveries(
     id: uuid.UUID,
+    tenant: CurrentTenant,
     session: DBSession,
-    _: ApiKey = Depends(require_scope("read:signals")),
 ):
-    """Return all delivery attempts for a signal."""
-    # Ensure signal exists first
-    await signal_service.get_signal(session, id)
-    return await delivery_service.get_deliveries_for_signal(session, id)
+    await signal_service.get_signal(session, id, tenant_id=tenant.id)
+    return await delivery_service.get_deliveries_for_signal(session, id, tenant_id=tenant.id)
 
 
 @router.get("/{id}/outcome", response_model=OutcomeResponse)
 async def get_signal_outcome(
     id: uuid.UUID,
+    tenant: CurrentTenant,
     session: DBSession,
-    _: ApiKey = Depends(require_scope("read:signals")),
 ):
-    """Return the outcome for a specific signal."""
-    return await outcome_service.get_outcome(session, id)
+    return await outcome_service.get_outcome(session, id, tenant_id=tenant.id)

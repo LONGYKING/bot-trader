@@ -24,7 +24,7 @@ class OutcomeRepository(BaseRepository[SignalOutcome]):
         from_dt: datetime | None = None,
         to_dt: datetime | None = None,
     ) -> list:
-        conds = []
+        conds = list(self._tenant_clause())
         if is_profitable is not None:
             conds.append(SignalOutcome.is_profitable == is_profitable)
         if from_dt is not None:

@@ -25,6 +25,12 @@ class Signal(UUIDPrimaryKey, Base):
         UniqueConstraint("strategy_id", "asset", "entry_time", name="uq_signal_strategy_entry"),
     )
 
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     strategy_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("strategies.id", ondelete="CASCADE"),
@@ -46,6 +52,4 @@ class Signal(UUIDPrimaryKey, Base):
     indicator_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     rule_triggered: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_profitable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

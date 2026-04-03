@@ -57,7 +57,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
     async def list_by_channel(self, channel_id: uuid.UUID) -> list[Subscription]:
         stmt = (
             select(Subscription)
-            .where(Subscription.channel_id == channel_id)
+            .where(*self._tenant_clause(), Subscription.channel_id == channel_id)
             .order_by(Subscription.created_at.desc())
         )
         result = await self.session.execute(stmt)

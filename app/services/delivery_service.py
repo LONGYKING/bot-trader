@@ -55,18 +55,20 @@ async def fan_out_signal(
 async def get_deliveries_for_signal(
     session: AsyncSession,
     signal_id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
 ) -> list[SignalDelivery]:
     """Return all delivery records for a signal."""
-    repo = DeliveryRepository(session)
+    repo = DeliveryRepository(session, tenant_id)
     return await repo.get_by_signal(signal_id)
 
 
 async def get_deliveries_for_channel(
     session: AsyncSession,
     channel_id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[SignalDelivery]:
     """Return paginated delivery records for a channel."""
-    repo = DeliveryRepository(session)
+    repo = DeliveryRepository(session, tenant_id)
     return await repo.get_by_channel(channel_id, limit=limit, offset=offset)

@@ -1,13 +1,4 @@
-"""Channel management service.
-
-Channel classes are loaded from the ``app.channels`` package. Each channel class
-must implement at minimum:
-
-    async def send_test(self) -> dict  — sends a test message, returns result dict
-    async def health_check(self) -> bool  — returns True if healthy
-
-Channel classes are looked up by ``channel_type`` string stored on the model.
-"""
+"""Channel management service."""
 import importlib
 import uuid
 from typing import Any
@@ -18,7 +9,6 @@ from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.channel import Channel
 from app.repositories.channel import ChannelRepository
 
-# Mapping from channel_type string to the module/class within app.channels
 _KNOWN_CHANNEL_TYPES: dict[str, str] = {
     "telegram": "telegram.TelegramChannel",
     "discord": "discord.DiscordChannel",
@@ -30,11 +20,6 @@ _KNOWN_CHANNEL_TYPES: dict[str, str] = {
 
 
 def _load_channel_class(channel_type: str):
-    """Dynamically load a channel class from app.channels.<module>.<ClassName>.
-
-    Returns None if the module or class is not yet implemented (graceful degradation
-    during development when only some channels exist).
-    """
     path = _KNOWN_CHANNEL_TYPES.get(channel_type)
     if path is None:
         return None
@@ -54,12 +39,15 @@ def _validate_channel_type(channel_type: str) -> None:
         )
 
 
-async def create_channel(session: AsyncSession, data: dict[str, Any]) -> Channel:
-    """Create a new channel. Validates channel_type and name uniqueness."""
+async def create_channel(
+    session: AsyncSession,
+    data: dict[str, Any],
+    tenant_id: uuid.UUID | None = None,
+) -> Channel:
     channel_type = data.get("channel_type", "")
     _validate_channel_type(channel_type)
 
-    repo = ChannelRepository(session)
+    repo = ChannelRepository(session, tenant_id)
     existing = await repo.get_by_name(data.get("name", ""))
     if existing is not None:
         raise ConflictError(f"Channel with name '{data['name']}' already exists")
@@ -67,18 +55,25 @@ async def create_channel(session: AsyncSession, data: dict[str, Any]) -> Channel
     return await repo.create(data)
 
 
-async def get_channel(session: AsyncSession, id: uuid.UUID) -> Channel:
-    """Return a channel by id (config decrypted). Raises NotFoundError if missing."""
-    repo = ChannelRepository(session)
-    channel = await repo.get_by_id(id)  # decrypts config
+async def get_channel(
+    session: AsyncSession,
+    id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> Channel:
+    repo = ChannelRepository(session, tenant_id)
+    channel = await repo.get_by_id(id)
     if channel is None:
         raise NotFoundError("Channel", str(id))
     return channel
 
 
-async def list_channels(session: AsyncSession, limit: int = 100, offset: int = 0) -> list[Channel]:
-    """Return paginated active channels with decrypted configs."""
-    repo = ChannelRepository(session)
+async def list_channels(
+    session: AsyncSession,
+    tenant_id: uuid.UUID | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[Channel]:
+    repo = ChannelRepository(session, tenant_id)
     return await repo.list_active(limit=limit, offset=offset)
 
 
@@ -86,9 +81,9 @@ async def update_channel(
     session: AsyncSession,
     id: uuid.UUID,
     data: dict[str, Any],
+    tenant_id: uuid.UUID | None = None,
 ) -> Channel:
-    """Update a channel. Validates channel_type if changed; checks name uniqueness."""
-    repo = ChannelRepository(session)
+    repo = ChannelRepository(session, tenant_id)
     channel = await repo.get_by_id(id)
     if channel is None:
         raise NotFoundError("Channel", str(id))
@@ -107,9 +102,12 @@ async def update_channel(
     return updated
 
 
-async def delete_channel(session: AsyncSession, id: uuid.UUID) -> None:
-    """Hard-delete a channel. Cascade handles subscriptions/deliveries."""
-    repo = ChannelRepository(session)
+async def delete_channel(
+    session: AsyncSession,
+    id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> None:
+    repo = ChannelRepository(session, tenant_id)
     channel = await repo.get_by_id(id)
     if channel is None:
         raise NotFoundError("Channel", str(id))
@@ -118,21 +116,17 @@ async def delete_channel(session: AsyncSession, id: uuid.UUID) -> None:
         raise NotFoundError("Channel", str(id))
 
 
-async def test_channel(session: AsyncSession, id: uuid.UUID) -> dict:
-    """Load channel, instantiate its class, call send_test(), and return the result.
-
-    If the channel class is not yet implemented the service returns a descriptive
-    error result rather than raising so callers can surface the message to the user.
-    """
-    channel = await get_channel(session, id)
+async def test_channel(
+    session: AsyncSession,
+    id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> dict:
+    channel = await get_channel(session, id, tenant_id=tenant_id)
     cls = _load_channel_class(channel.channel_type)
     if cls is None:
         return {
             "success": False,
-            "error": (
-                f"Channel type '{channel.channel_type}' is not implemented yet. "
-                "No test could be performed."
-            ),
+            "error": f"Channel type '{channel.channel_type}' is not implemented yet.",
         }
     try:
         instance = cls(channel.config)
@@ -144,10 +138,13 @@ async def test_channel(session: AsyncSession, id: uuid.UUID) -> dict:
         return {"success": False, "message": str(exc)}
 
 
-async def check_channel_health(session: AsyncSession, id: uuid.UUID) -> dict:
-    """Run a health check and persist the result. Returns health status dict."""
-    repo = ChannelRepository(session)
-    channel = await get_channel(session, id)
+async def check_channel_health(
+    session: AsyncSession,
+    id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> dict:
+    repo = ChannelRepository(session, tenant_id)
+    channel = await get_channel(session, id, tenant_id=tenant_id)
     cls = _load_channel_class(channel.channel_type)
 
     ok = False
@@ -168,8 +165,4 @@ async def check_channel_health(session: AsyncSession, id: uuid.UUID) -> dict:
 
     await repo.update_health(id, ok)
 
-    return {
-        "channel_id": str(id),
-        "healthy": ok,
-        "error": error,
-    }
+    return {"channel_id": str(id), "healthy": ok, "error": error}

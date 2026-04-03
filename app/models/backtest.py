@@ -12,6 +12,12 @@ from app.models.base import Base, UUIDPrimaryKey
 class Backtest(UUIDPrimaryKey, Base):
     __tablename__ = "backtests"
 
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     strategy_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("strategies.id", ondelete="CASCADE"),
@@ -40,6 +46,12 @@ class Backtest(UUIDPrimaryKey, Base):
 class BacktestTrade(UUIDPrimaryKey, Base):
     __tablename__ = "backtest_trades"
 
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     backtest_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("backtests.id", ondelete="CASCADE"),

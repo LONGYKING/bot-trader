@@ -30,6 +30,21 @@ class AuthorizationError(Exception):
         super().__init__(f"Insufficient permissions. Required scope: {required_scope}")
 
 
+class PlanLimitError(Exception):
+    def __init__(self, resource: str, current: int, limit: int):
+        self.resource = resource
+        self.current = current
+        self.limit = limit
+        super().__init__(
+            f"Plan limit reached for {resource}: {current}/{limit}. Upgrade your plan to continue."
+        )
+
+
+class PlanFeatureError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
 class ExternalServiceError(Exception):
     def __init__(self, service: str, message: str):
         self.service = service
@@ -60,6 +75,17 @@ async def authentication_handler(request: Request, exc: AuthenticationError) -> 
 
 
 async def authorization_handler(request: Request, exc: AuthorizationError) -> ORJSONResponse:
+    return ORJSONResponse(status_code=403, content={"detail": str(exc)})
+
+
+async def plan_limit_handler(request: Request, exc: PlanLimitError) -> ORJSONResponse:
+    return ORJSONResponse(
+        status_code=402,
+        content={"detail": str(exc), "resource": exc.resource, "current": exc.current, "limit": exc.limit},
+    )
+
+
+async def plan_feature_handler(request: Request, exc: PlanFeatureError) -> ORJSONResponse:
     return ORJSONResponse(status_code=403, content={"detail": str(exc)})
 
 

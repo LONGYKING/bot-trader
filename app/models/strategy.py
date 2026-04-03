@@ -1,6 +1,8 @@
+import uuid
 
-from sqlalchemy import Boolean, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKey
@@ -9,7 +11,13 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKey
 class Strategy(UUIDPrimaryKey, TimestampMixin, Base):
     __tablename__ = "strategies"
 
-    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)  # unique per-tenant via DB index
     strategy_class: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     asset: Mapped[str] = mapped_column(String(50), nullable=False)

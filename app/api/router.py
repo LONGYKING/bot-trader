@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from fastapi.responses import ORJSONResponse
 from sqlalchemy import text
 
-from app.api.v1 import admin, backtests, channels, outcomes, signals, strategies, subscriptions
+from app.api.v1 import admin, auth, backtests, billing, channels, outcomes, signals, strategies, subscriptions
 from app.config import get_settings
 from app.db.redis import get_redis
 from app.db.session import get_engine
@@ -61,3 +61,5 @@ api_router.include_router(channels.router, prefix="/api/v1", tags=["Channels"])
 api_router.include_router(subscriptions.router, prefix="/api/v1", tags=["Subscriptions"])
 api_router.include_router(outcomes.router, prefix="/api/v1", tags=["Outcomes"])
 api_router.include_router(admin.router, prefix="/api/v1", tags=["Admin"])
+api_router.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
+api_router.include_router(billing.router, prefix="/api/v1", tags=["Billing"])

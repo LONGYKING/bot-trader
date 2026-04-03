@@ -84,6 +84,7 @@ async def generate_signal(
     session: AsyncSession,
     arq_pool: object,
     strategy_id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
 ) -> Signal | None:
     """Full signal generation pipeline.
 
@@ -99,7 +100,7 @@ async def generate_signal(
         The persisted :class:`~app.models.signal.Signal`, or ``None`` if the
         strategy returned ``signal_value == 0`` or a risk gate vetoed it.
     """
-    strategy_repo = StrategyRepository(session)
+    strategy_repo = StrategyRepository(session, tenant_id)
     strategy = await strategy_repo.get_by_id(strategy_id)
     if strategy is None:
         raise NotFoundError("Strategy", str(strategy_id))
@@ -156,7 +157,7 @@ async def generate_signal(
     trade_type = getattr(strategy, "trade_type", "options") or "options"
     entry_price = float(df["close"].iloc[-1])
 
-    signal_repo = SignalRepository(session)
+    signal_repo = SignalRepository(session, tenant_id)
     signal = await signal_repo.create(
         _build_signal_dict(
             strategy_id=strategy_id,
@@ -183,6 +184,7 @@ async def force_signal(
     strategy_id: uuid.UUID,
     signal_value: int = 7,
     entry_price: float | None = None,
+    tenant_id: uuid.UUID | None = None,
 ) -> Signal:
     """Create and deliver a signal with an arbitrary ``signal_value``.
 
@@ -199,14 +201,14 @@ async def force_signal(
             f"signal_value must be one of {sorted(VALID_SIGNAL_VALUES)}. Got {signal_value}"
         )
 
-    strategy_repo = StrategyRepository(session)
+    strategy_repo = StrategyRepository(session, tenant_id)
     strategy = await strategy_repo.get_by_id(strategy_id)
     if strategy is None:
         raise NotFoundError("Strategy", str(strategy_id))
 
     trade_type = getattr(strategy, "trade_type", "options") or "options"
 
-    signal_repo = SignalRepository(session)
+    signal_repo = SignalRepository(session, tenant_id)
     signal = await signal_repo.create(
         _build_signal_dict(
             strategy_id=strategy_id,
@@ -232,13 +234,10 @@ async def list_signals(
     filters: dict,
     limit: int = 50,
     offset: int = 0,
+    tenant_id: uuid.UUID | None = None,
 ) -> tuple[list[Signal], int]:
-    """Return ``(items, total_count)`` with optional filters.
-
-    Supported filter keys: ``strategy_id``, ``asset``, ``signal_value``,
-    ``from_dt``, ``to_dt``, ``is_profitable``.
-    """
-    repo = SignalRepository(session)
+    """Return ``(items, total_count)`` with optional filters."""
+    repo = SignalRepository(session, tenant_id)
     items = await repo.list_filtered(
         strategy_id=filters.get("strategy_id"),
         asset=filters.get("asset"),
@@ -260,9 +259,13 @@ async def list_signals(
     return items, total
 
 
-async def get_signal(session: AsyncSession, id: uuid.UUID) -> Signal:
-    """Return signal by id.  Raises :exc:`~app.exceptions.NotFoundError` if missing."""
-    repo = SignalRepository(session)
+async def get_signal(
+    session: AsyncSession,
+    id: uuid.UUID,
+    tenant_id: uuid.UUID | None = None,
+) -> Signal:
+    """Return signal by id. Raises NotFoundError if missing."""
+    repo = SignalRepository(session, tenant_id)
     signal = await repo.get_by_id(id)
     if signal is None:
         raise NotFoundError("Signal", str(id))

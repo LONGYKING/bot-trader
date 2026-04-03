@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import func, insert, select, update
 
 from app.models.backtest import Backtest, BacktestTrade
 from app.repositories.base import BaseRepository
@@ -13,7 +13,7 @@ class BacktestRepository(BaseRepository[Backtest]):
     async def get_by_strategy(self, strategy_id: uuid.UUID) -> list[Backtest]:
         stmt = (
             select(Backtest)
-            .where(Backtest.strategy_id == strategy_id)
+            .where(*self._tenant_clause(), Backtest.strategy_id == strategy_id)
             .order_by(Backtest.created_at.desc())
         )
         result = await self.session.execute(stmt)
@@ -85,6 +85,20 @@ class BacktestRepository(BaseRepository[Backtest]):
             select(func.count())
             .select_from(BacktestTrade)
             .where(BacktestTrade.backtest_id == backtest_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one()
+
+    async def count_this_month(self, tenant_id: uuid.UUID) -> int:
+        now = datetime.now(UTC)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        stmt = (
+            select(func.count())
+            .select_from(Backtest)
+            .where(
+                Backtest.tenant_id == tenant_id,
+                Backtest.created_at >= month_start,
+            )
         )
         result = await self.session.execute(stmt)
         return result.scalar_one()

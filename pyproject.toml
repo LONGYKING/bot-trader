@@ -40,6 +40,10 @@ dependencies = [
     "jinja2>=3.1.0",
     "openpyxl>=3.1.0",
     "cloudinary>=1.40.0",
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0",
+    "stripe>=11.0.0",
+    "email-validator>=2.2.0",
 ]
 
 [dependency-groups]

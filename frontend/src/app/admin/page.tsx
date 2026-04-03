@@ -2,14 +2,18 @@
 
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { admin } from "@/lib/api"
+import Link from "next/link"
+import { admin, billing } from "@/lib/api"
 import { fmtDate } from "@/lib/utils"
 import { StatusDot } from "@/components/shared/status-dot"
+import { useAuthStore } from "@/hooks/use-auth"
 import { toast } from "sonner"
-import { KeyRound, Plus, Copy, RefreshCw, Trash2 } from "lucide-react"
+import { KeyRound, Plus, Copy, RefreshCw, Trash2, CreditCard, ExternalLink } from "lucide-react"
 
 export default function AdminPage() {
   const qc = useQueryClient()
+  const tenant = useAuthStore((s) => s.tenant)
+  const limits = useAuthStore((s) => s.limits)
   const [showCreate, setShowCreate] = useState(false)
   const [newKeyName, setNewKeyName] = useState("")
   const [revealedKey, setRevealedKey] = useState<string | null>(null)
@@ -61,8 +65,62 @@ export default function AdminPage() {
     toast.success("Copied to clipboard")
   }
 
+  const openPortal = async () => {
+    try {
+      const { portal_url } = await billing.portal({ return_url: window.location.href })
+      window.location.href = portal_url
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to open billing portal")
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* Billing Status */}
+      {tenant && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="mb-1 text-sm font-semibold text-slate-100">Subscription</h2>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-300 capitalize">{tenant.plan_key} plan</span>
+                <span className={`rounded px-2 py-0.5 text-xs font-medium ${
+                  tenant.plan_status === "active"
+                    ? "bg-emerald-500/10 text-emerald-400"
+                    : "bg-amber-500/10 text-amber-400"
+                }`}>
+                  {tenant.plan_status}
+                </span>
+                {limits && (
+                  <span className="text-xs text-slate-500">
+                    {limits.max_strategies === -1 ? "Unlimited" : limits.max_strategies} strategies ·{" "}
+                    {limits.max_channels === -1 ? "Unlimited" : limits.max_channels} channels
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/pricing"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors"
+              >
+                <CreditCard className="h-3 w-3" />
+                Plans
+              </Link>
+              {tenant.plan_key !== "free" && (
+                <button
+                  onClick={openPortal}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-slate-500 transition-colors"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Manage
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Worker Status */}
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h2 className="mb-3 text-sm font-semibold text-slate-100">Worker Status</h2>

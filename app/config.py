@@ -75,6 +75,29 @@ class Settings(BaseSettings):
     worker_max_jobs: int = 20
     worker_job_timeout: int = 600
 
+    # ── JWT ───────────────────────────────────────────────────────────────────
+    jwt_secret_key: str = "change-me-jwt-secret-at-least-32-chars!!"
+    jwt_algorithm: str = "HS256"
+    jwt_access_expires_minutes: int = 60
+    jwt_refresh_expires_days: int = 7
+
+    # ── Payment ───────────────────────────────────────────────────────────────
+    payment_provider: str = "stripe"  # active provider; switch with one env var
+
+    # Stripe
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+
+    # Paddle
+    paddle_api_key: str | None = None
+    paddle_webhook_secret: str | None = None
+    paddle_environment: str = "sandbox"  # "sandbox" | "production"
+
+    # Lemon Squeezy
+    lemonsqueezy_api_key: str | None = None
+    lemonsqueezy_webhook_secret: str | None = None
+    lemonsqueezy_store_id: str | None = None
+
     @field_validator("secret_key")
     @classmethod
     def secret_key_must_be_long(cls, v: str) -> str:

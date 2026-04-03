@@ -23,12 +23,16 @@ from app.exceptions import (
     ConflictError,
     ExternalServiceError,
     NotFoundError,
+    PlanFeatureError,
+    PlanLimitError,
     ValidationError,
     authentication_handler,
     authorization_handler,
     conflict_handler,
     external_service_handler,
     not_found_handler,
+    plan_feature_handler,
+    plan_limit_handler,
     validation_handler,
 )
 from app.integrations.exchange_factory import close_all_clients
@@ -114,6 +118,8 @@ def create_app() -> FastAPI:
     app.add_exception_handler(AuthenticationError, authentication_handler)  # type: ignore[arg-type]
     app.add_exception_handler(AuthorizationError, authorization_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ExternalServiceError, external_service_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(PlanLimitError, plan_limit_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(PlanFeatureError, plan_feature_handler)  # type: ignore[arg-type]
 
     # Routes
     app.include_router(api_router)
